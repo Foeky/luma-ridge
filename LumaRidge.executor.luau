@@ -39,8 +39,8 @@ startupLabel = Instance.new("TextLabel")
 startupLabel.AnchorPoint = Vector2.new(0.5, 0)
 startupLabel.Position = UDim2.new(0.5, 0, 0, 12)
 startupLabel.Size = UDim2.new(0.85, 0, 0, 80)
-startupLabel.BackgroundColor3 = Color3.fromRGB(29, 30, 43)
-startupLabel.TextColor3 = Color3.fromRGB(232, 234, 247)
+startupLabel.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+startupLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
 startupLabel.Font = Enum.Font.SourceSans
 startupLabel.TextSize = 17
 startupLabel.TextWrapped = true
@@ -85,21 +85,21 @@ local function loadLibrary()
     local Library = {}
 
     local COLORS = {
-        background = Color3.fromRGB(29, 30, 43),
-        rail = Color3.fromRGB(25, 26, 38),
-        surface = Color3.fromRGB(41, 43, 58),
-        hover = Color3.fromRGB(59, 61, 81),
-        border = Color3.fromRGB(85, 87, 113),
-        text = Color3.fromRGB(232, 234, 247),
-        secondary = Color3.fromRGB(180, 184, 207),
-        accent = Color3.fromRGB(197, 174, 245),
-        ink = Color3.fromRGB(31, 25, 49),
+        background = Color3.fromRGB(6, 6, 6),
+        rail = Color3.fromRGB(10, 10, 10),
+        surface = Color3.fromRGB(19, 19, 19),
+        hover = Color3.fromRGB(32, 32, 32),
+        border = Color3.fromRGB(65, 65, 65),
+        text = Color3.fromRGB(240, 240, 240),
+        secondary = Color3.fromRGB(175, 175, 175),
+        accent = Color3.fromRGB(220, 220, 220),
+        ink = Color3.fromRGB(8, 8, 8),
     }
 
     local DEFAULT_FONTS = {
-        display = Font.new("rbxasset://fonts/families/Arimo.json", Enum.FontWeight.Bold),
-        title = Font.new("rbxasset://fonts/families/Arimo.json", Enum.FontWeight.Bold),
-        body = Font.new("rbxasset://fonts/families/Arimo.json"),
+        display = Font.new("rbxassetid://11598121416", Enum.FontWeight.Bold),
+        title = Font.new("rbxassetid://11598121416", Enum.FontWeight.SemiBold),
+        body = Font.new("rbxassetid://11598121416"),
     }
 
     local ICONS = {
@@ -263,9 +263,10 @@ local function loadLibrary()
         local player = Players.LocalPlayer
         assert(player, "Run Luma Ridge in a Roblox client")
         local parent = options.parent or player:WaitForChild("PlayerGui")
-        local targetHeight = UserInputService.TouchEnabled and 44 or 34
+        local targetHeight = UserInputService.TouchEnabled and 46 or 40
+        local iconButtonSize = UserInputService.TouchEnabled and 44 or 28
         local headerHeight = targetHeight + 12
-        local desiredSize = options.size or Vector2.new(780, 540)
+        local desiredSize = options.size or Vector2.new(880, 610)
         local minSize = options.minSize or Vector2.new(580, 375)
         local maxSize = options.maxSize or Vector2.new(1100, 820)
         local toggleKey = options.toggleKey
@@ -287,7 +288,7 @@ local function loadLibrary()
         local transition = TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         local tweens = setmetatable({}, { __mode = "k" })
         local textSizes = setmetatable({}, { __mode = "k" })
-        local textScale = 1
+        local textScale = 1.1
 
         local function sizeText(object, size)
             textSizes[object] = size
@@ -393,7 +394,7 @@ local function loadLibrary()
         local shellGradient = make("UIGradient", nil, {
             Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, color.background),
-                ColorSequenceKeypoint.new(0.5, color.background:Lerp(color.accent, 0.17)),
+                ColorSequenceKeypoint.new(0.5, color.background:Lerp(color.accent, 0.07)),
                 ColorSequenceKeypoint.new(1, color.background),
             }),
             Rotation = 25, Offset = Vector2.new(-0.9, 0),
@@ -422,6 +423,7 @@ local function loadLibrary()
         })
         local contourScale = make("UIScale", contours, { Scale = 1 })
         local contourAlpha = math.clamp(options.topoTransparency or 0.90, 0, 1)
+        local backgroundStyle = "Contours"
         for level = 0, 6 do
             local rx, ry = 70 + level * 27, 48 + level * 21
             local function point(angle)
@@ -434,6 +436,22 @@ local function loadLibrary()
                 line(contours, x, y, nextX, nextY, 1, color.accent, contourAlpha)
                 x, y = nextX, nextY
             end
+        end
+
+        local grid = frame(contours, { Name = "Grid", Size = UDim2.fromScale(1, 1), Visible = false })
+        local dots = frame(contours, { Name = "Dots", Size = UDim2.fromScale(1, 1), Visible = false })
+        for x = 10, 540, 28 do
+            line(grid, x, 6, x, 454, 1, color.accent, contourAlpha)
+            for y = 6, 454, 28 do
+                local dot = frame(dots, {
+                    Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(2, 2),
+                    BackgroundColor3 = color.accent, BackgroundTransparency = contourAlpha,
+                })
+                corner(dot, 1)
+            end
+        end
+        for y = 6, 454, 28 do
+            line(grid, 10, y, 540, y, 1, color.accent, contourAlpha)
         end
 
         local header = frame(main, {
@@ -453,9 +471,9 @@ local function loadLibrary()
 
         local dragRegion = frame(header, { Name = "DragRegion", Size = UDim2.new(1, -targetHeight - 12, 1, 0), Active = true })
         local hide = button(header, "HideWindow")
-        hide.Size = UDim2.fromOffset(targetHeight, targetHeight)
+        hide.Size = UDim2.fromOffset(iconButtonSize, iconButtonSize)
         positionRight(hide, 6)
-        local hideIcon = addIcon(hide, "hide", 16, color.text)
+        local hideIcon = addIcon(hide, "close", 14, color.text)
         hideIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         hideIcon.Position = UDim2.fromScale(0.5, 0.5)
 
@@ -466,7 +484,9 @@ local function loadLibrary()
         local navigation = scroll(rail, "Tabs", Enum.AutomaticSize.Y, color.border)
         navigation.Position = UDim2.fromOffset(6, 5)
         navigation.Size = UDim2.new(1, -12, 1, -10)
+        padding(navigation, 3, 3)
         local tabLayout = list(navigation, 4)
+        local settingsDock = frame(main, { Name = "SettingsDock", ZIndex = 3, Visible = false })
         local content = frame(main, { Name = "Pages", ZIndex = 2 })
         local resize = button(main, "ResizeWindow", 8)
         resize.AnchorPoint = Vector2.new(1, 1)
@@ -479,9 +499,9 @@ local function loadLibrary()
         local open = button(safeArea, "ShowWindow", 6)
         open.AnchorPoint = Vector2.new(0.5, 0)
         open.Position = UDim2.new(0.5, 0, 0, 6)
-        open.Size = UDim2.fromOffset(targetHeight, targetHeight)
+        open.Size = UDim2.fromOffset(iconButtonSize, iconButtonSize)
         open.Visible = false
-        local openIcon = addIcon(open, options.icon or "ridge", 21, color.accent)
+        local openIcon = addIcon(open, options.icon or "ridge", 17, color.accent)
         openIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         openIcon.Position = UDim2.fromScale(0.5, 0.5)
 
@@ -502,7 +522,7 @@ local function loadLibrary()
         end
 
         local function syncAnimation()
-            if animated and visible and not reducedMotion then
+            if animated and visible and not reducedMotion and backgroundStyle ~= "Solid" then
                 backgroundTween:Play()
             else
                 backgroundTween:Pause()
@@ -553,11 +573,27 @@ local function loadLibrary()
             if destroyed then return end
             assert(type(fraction) == "number" and fraction == fraction, "Background detail must be a number")
             contourAlpha = 1 - math.clamp(fraction, 0, 1)
-            for _, segment in ipairs(contours:GetChildren()) do
-                if segment:IsA("Frame") then
+            for _, segment in ipairs(contours:GetDescendants()) do
+                if segment:IsA("Frame") and segment ~= grid and segment ~= dots then
                     segment.BackgroundTransparency = contourAlpha
                 end
             end
+        end
+
+        function window:SetBackgroundStyle(style)
+            assert(style == "Contours" or style == "Grid" or style == "Dots"
+                or style == "Gradient" or style == "Solid", "Unknown background style")
+            if destroyed then return end
+            backgroundStyle = style
+            grid.Visible = style == "Grid"
+            dots.Visible = style == "Dots"
+            for _, segment in ipairs(contours:GetChildren()) do
+                if segment:IsA("Frame") and segment ~= grid and segment ~= dots then
+                    segment.Visible = style == "Contours"
+                end
+            end
+            backdrop.Visible = style ~= "Solid"
+            syncAnimation()
         end
 
         function window:GetGui()
@@ -651,13 +687,17 @@ local function loadLibrary()
                 rail.Position = UDim2.fromOffset(4, headerHeight + 2)
                 rail.Size = UDim2.new(1, -8, 0, targetHeight + 11)
                 content.Position = UDim2.fromOffset(0, bodyTop)
-                content.Size = UDim2.new(1, 0, 1, -bodyTop - 4)
+                content.Size = UDim2.new(1, 0, 1, -bodyTop - (settingsDock.Visible and targetHeight + 12 or 4))
+                navigation.Size = UDim2.new(1, -12, 1, -10)
             else
                 rail.Position = UDim2.fromOffset(4, headerHeight + 2)
-                rail.Size = UDim2.new(0, 144, 1, -headerHeight - 6)
-                content.Position = UDim2.fromOffset(151, headerHeight + 2)
-                content.Size = UDim2.new(1, -151, 1, -headerHeight - 7)
+                rail.Size = UDim2.new(0, 164, 1, -headerHeight - 6)
+                content.Position = UDim2.fromOffset(171, headerHeight + 2)
+                content.Size = UDim2.new(1, -171, 1, -headerHeight - 7)
+                navigation.Size = UDim2.new(1, -12, 1, -(settingsDock.Visible and targetHeight + 24 or 10))
             end
+            settingsDock.Position = UDim2.new(0, 12, 1, -targetHeight - 10)
+            settingsDock.Size = UDim2.fromOffset(148, targetHeight)
             local axis = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
             navigation.AutomaticCanvasSize = axis
             navigation.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
@@ -768,10 +808,10 @@ local function loadLibrary()
             end
         end
 
-        function window:AddTab(name, icon)
+        function window:AddTab(name, icon, docked)
             assert(not destroyed, "The Luma Ridge window has been destroyed")
             local order = #tabs + 1
-            local tabButton = button(navigation, tostring(name))
+            local tabButton = button(docked and settingsDock or navigation, tostring(name))
             tabButton.LayoutOrder = order
             if icon then
                 local tabIcon = addIcon(tabButton, icon, 16, color.accent)
@@ -793,7 +833,9 @@ local function loadLibrary()
             frame(stack, { Size = UDim2.fromOffset(1, 22), LayoutOrder = 2147483647 })
             local tab = { page = page, label = tabLabel }
             function tab.layout()
-                tabButton.Size = compact and UDim2.fromOffset(123, targetHeight) or UDim2.new(1, -4, 0, targetHeight)
+                tabButton.Size = docked and UDim2.fromScale(1, 1)
+                    or compact and UDim2.fromOffset(140, targetHeight)
+                    or UDim2.new(1, -8, 0, targetHeight)
             end
             tab.select = interactive(tabButton, function() selectTab(tab) end, color.rail)
             tabs[order] = tab
@@ -1163,9 +1205,11 @@ local function loadLibrary()
             assert(not destroyed, "The Luma Ridge window has been destroyed")
             if appearance then return appearance end
 
-            appearance = self:AddTab("Appearance", "settings")
+            settingsDock.Visible = true
+            appearance = self:AddTab("Settings", "settings", true)
+            layout()
             appearance:AddSection("Interface")
-            local sizes = { Small = 0.9, Default = 1, Large = 1.15 }
+            local sizes = { Small = 1, Default = 1.1, Large = 1.25 }
             appearance:AddDropdown("Text size", {
                 options = { "Small", "Default", "Large" }, default = "Default",
                 callback = function(choice)
@@ -1177,6 +1221,10 @@ local function loadLibrary()
             })
 
             appearance:AddSection("Background")
+            appearance:AddDropdown("Background style", {
+                options = { "Contours", "Grid", "Dots", "Gradient", "Solid" }, default = backgroundStyle,
+                callback = function(style) self:SetBackgroundStyle(style) end,
+            })
             local speeds = { Fast = 6, Normal = 12, Slow = 24 }
             local speed = backgroundDuration == 6 and "Fast"
                 or backgroundDuration == 12 and "Normal"
@@ -1194,7 +1242,7 @@ local function loadLibrary()
                 callback = function(choice) self:SetBackgroundSpeed(speeds[choice]) end,
             })
             appearance:AddSlider("Background detail", {
-                description = "Adjust contour visibility.",
+                description = "Adjust pattern visibility.",
                 min = 0, max = 100, default = math.round((1 - contourAlpha) * 100),
                 callback = function(value) self:SetBackgroundDetail(value / 100) end,
             })
@@ -1253,7 +1301,7 @@ overview:AddKeybind("Run action shortcut", {
     callback = runAction,
 })
 
-local settings = window:AddTab("Settings", "folder")
+local settings = window:AddTab("Controls", "folder")
 settings:AddSection("Preferences")
 local selection = settings:AddLabel("Profile: Hiker / Detail: 60% / Map: Terrain")
 local profile, detail, map = "Hiker", 60, "Terrain"

@@ -1,6 +1,6 @@
 # Luma Ridge
 
-A Roblox executor UI framework with tabs, controls, appearance settings, plugins, and an interactive playground.
+A Roblox executor UI framework with a black theme, Open Sans, tabs, plugins, and an interactive playground. The default window is 880 × 610 and fits smaller screens automatically.
 
 ## Run in Lynx
 
@@ -29,9 +29,9 @@ Startup displays progress and downloads `assets/Icons.png` into the executor wor
 
 ## Controls
 
-- **Right Shift** hides or opens the panel. The centered ridge icon also reopens it.
-- **Settings** contains the playground inputs. **Tests** runs a control smoke test.
-- **Appearance** adjusts text size, background speed and detail. Enable **Debug** for the on-screen diagnostic log and console messages.
+- **Right Shift** or the small **X** hides the panel. The centered ridge icon reopens it.
+- **Controls** contains the playground inputs. **Tests** runs a control smoke test.
+- **Settings** stays at the bottom-left. Choose **Contours**, **Grid**, **Dots**, **Gradient**, or **Solid**, and adjust text size, animation speed, and pattern visibility. Enable **Debug** for the on-screen diagnostic log and console messages.
 - **Unload** removes the panel and its event connections and calls plugin cleanup functions.
 
 ## Plugins
