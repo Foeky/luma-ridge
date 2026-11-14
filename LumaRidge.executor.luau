@@ -1,11 +1,81 @@
-if not game:IsLoaded() then
-    game.Loaded:Wait()
+print("[Luma Ridge] Script entered")
+local environment = type(getgenv) == "function" and getgenv() or _G
+local config = type(environment.LumaRidgeConfig) == "table" and environment.LumaRidgeConfig or {}
+local debugEnabled = config.debug == true
+local messages = {}
+local debugLabel
+local startupGui
+local startupLabel
+local activeWindow
+local iconAtlas
+local function report(message, isError)
+    message = tostring(message)
+    table.insert(messages, message)
+    if #messages > 30 then table.remove(messages, 1) end
+    if startupLabel then startupLabel.Text = message end
+    if debugLabel then debugLabel.Text = table.concat(messages, "\n") end
+    if isError then warn("[Luma Ridge] " .. message)
+    elseif debugEnabled or startupLabel then print("[Luma Ridge] " .. message) end
 end
 
+local function start()
+
 local players = game:GetService("Players")
-while not players.LocalPlayer do
-    players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+local deadline = os.clock() + 20
+while not players.LocalPlayer and os.clock() < deadline do
+    task.wait(0.1)
 end
+assert(players.LocalPlayer, "No local player after 20 seconds. Select a joined Roblox client in Lynx.")
+local playerGui = players.LocalPlayer:WaitForChild("PlayerGui", 20)
+assert(playerGui, "PlayerGui was not available after 20 seconds")
+local previousStartup = playerGui:FindFirstChild("LumaRidgeStartup")
+if previousStartup then previousStartup:Destroy() end
+startupGui = Instance.new("ScreenGui")
+startupGui.Name = "LumaRidgeStartup"
+startupGui.ResetOnSpawn = false
+startupGui.DisplayOrder = 1000
+startupGui.Parent = playerGui
+startupLabel = Instance.new("TextLabel")
+startupLabel.AnchorPoint = Vector2.new(0.5, 0)
+startupLabel.Position = UDim2.new(0.5, 0, 0, 12)
+startupLabel.Size = UDim2.new(0.85, 0, 0, 80)
+startupLabel.BackgroundColor3 = Color3.fromRGB(29, 30, 43)
+startupLabel.TextColor3 = Color3.fromRGB(232, 234, 247)
+startupLabel.Font = Enum.Font.SourceSans
+startupLabel.TextSize = 17
+startupLabel.TextWrapped = true
+startupLabel.Parent = startupGui
+report("1/3 Preparing icons…")
+task.wait()
+local assetOk, assetError = pcall(function()
+    assert(type(isfile) == "function" and type(readfile) == "function"
+        and type(writefile) == "function" and type(getcustomasset) == "function", "Asset file APIs unavailable")
+    local path = "LumaRidge-icons-v2.png"
+    local valid = isfile(path) and readfile(path):sub(1, 8) == "\137PNG\r\n\26\n"
+    if not valid then
+        report("1/3 Downloading icon atlas…")
+        local done, downloaded, failure = false, nil, nil
+        task.spawn(function()
+            local ok, body = pcall(function()
+                return game:HttpGet(config.assetUrl or "https://raw.githubusercontent.com/Foeky/luma-ridge/main/assets/Icons.png")
+            end)
+            if ok then downloaded = body else failure = body end
+            done = true
+        end)
+        local timeout = os.clock() + 12
+        while not done and os.clock() < timeout do task.wait(0.1) end
+        assert(done, "Icon download timed out")
+        assert(type(downloaded) == "string" and downloaded:sub(1, 8) == "\137PNG\r\n\26\n",
+            tostring(failure or "Icon URL did not return a PNG. Check repository access."))
+        writefile(path, downloaded)
+        assert(isfile(path) and readfile(path) == downloaded, "Icon cache write failed")
+    end
+    iconAtlas = getcustomasset(path)
+    assert(type(iconAtlas) == "string" and iconAtlas ~= "", "Could not register icon atlas")
+end)
+if not assetOk then report("Built-in icons enabled. " .. tostring(assetError), true) end
+report("2/3 Building interface…")
+task.wait()
 
 local function loadLibrary()
     local Players = game:GetService("Players")
@@ -117,9 +187,17 @@ local function loadLibrary()
     end
 
     local function addIcon(parent, name, size, color)
-        for _, icon in ipairs(ICONS) do
+        for index, icon in ipairs(ICONS) do
             if icon[1] ~= name then
                 continue
+            end
+            if iconAtlas then
+                return make("ImageLabel", parent, {
+                    Name = name, BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size),
+                    Image = iconAtlas, ImageColor3 = color,
+                    ImageRectSize = Vector2.new(96, 96),
+                    ImageRectOffset = Vector2.new((index - 1) % 4 * 96, math.floor((index - 1) / 4) * 96),
+                })
             end
             local holder = frame(parent, { Name = name, Size = UDim2.fromOffset(size, size) })
             local scale = size / 24
@@ -170,7 +248,11 @@ local function loadLibrary()
 
     local function invoke(callback, ...)
         if callback then
-            task.spawn(callback, ...)
+            local args = table.pack(...)
+            task.spawn(function()
+                local ok, reason = xpcall(function() callback(table.unpack(args, 1, args.n)) end, debug.traceback)
+                if not ok then report(reason, true) end
+            end)
         end
     end
 
@@ -193,6 +275,8 @@ local function loadLibrary()
 
         local window = {}
         local connections = {}
+        local pluginCleanup = {}
+        local pluginNames = {}
         local tabs = {}
         local bindings = {}
         local activeTab, capture, pointer
@@ -212,7 +296,12 @@ local function loadLibrary()
         end
 
         local function connect(signal, fn)
-            local connection = signal:Connect(fn)
+            local connection = signal:Connect(function(...)
+                if destroyed then return end
+                local args = table.pack(...)
+                local ok, reason = xpcall(function() fn(table.unpack(args, 1, args.n)) end, debug.traceback)
+                if not ok then report(reason, true) end
+            end)
             table.insert(connections, connection)
             return connection
         end
@@ -280,7 +369,10 @@ local function loadLibrary()
                 focused = false
                 refresh()
             end)
-            connect(object.Activated, callback)
+            connect(object.Activated, function(...)
+                if debugEnabled then report("Activated: " .. object.Name) end
+                callback(...)
+            end)
             return function(value)
                 selected = value
                 refresh()
@@ -475,6 +567,11 @@ local function loadLibrary()
         local function dispose()
             if destroyed then return end
             destroyed = true
+            for _, cleanup in ipairs(pluginCleanup) do
+                local ok, reason = pcall(cleanup)
+                if not ok then report(reason, true) end
+            end
+            table.clear(pluginCleanup)
             stopPointer()
             capture = nil
             backgroundTween:Cancel()
@@ -495,6 +592,25 @@ local function loadLibrary()
             if destroyed then return end
             dispose()
             gui:Destroy()
+            if environment.LumaRidge == self then environment.LumaRidge = nil end
+            debugLabel = nil
+            print("[Luma Ridge] Unloaded")
+        end
+
+        function window:Use(plugin)
+            assert(not destroyed, "Window unloaded")
+            assert(type(plugin) == "table" and type(plugin.name) == "string"
+                and type(plugin.setup) == "function", "Plugin needs a name and setup function")
+            assert(not pluginNames[plugin.name], "Plugin already loaded")
+            pluginNames[plugin.name] = true
+            local ok, cleanup = xpcall(function() return plugin.setup(self, report) end, debug.traceback)
+            if not ok then
+                report("Plugin " .. plugin.name .. " failed: " .. tostring(cleanup), true)
+                return false
+            end
+            if type(cleanup) == "function" then table.insert(pluginCleanup, cleanup) end
+            report("Plugin loaded: " .. plugin.name)
+            return true
         end
 
         connect(gui.Destroying, dispose)
@@ -1083,6 +1199,13 @@ local function loadLibrary()
                 callback = function(value) self:SetBackgroundDetail(value / 100) end,
             })
             appearance:AddSection("Session")
+            appearance:AddToggle("Debug", "Show diagnostics and print events.", debugEnabled, function(enabled)
+                debugEnabled = enabled
+                debugLabel.Visible = enabled
+                report("Debug " .. (enabled and "enabled" or "disabled"))
+            end)
+            debugLabel = appearance:AddLabel(table.concat(messages, "\n"))
+            debugLabel.Visible = debugEnabled
             appearance:AddButton("Unload", "Close the panel and release its shortcuts.", function()
                 self:Destroy()
             end, "exit")
@@ -1111,6 +1234,8 @@ local window = LumaRidge.new({
     subtitle = "Component playground",
     toggleKey = Enum.KeyCode.RightShift,
 })
+activeWindow = window
+environment.LumaRidge = window
 
 local overview = window:AddTab("Overview", "grid")
 overview:AddSection("Quick actions")
@@ -1184,3 +1309,22 @@ tests:AddButton("Back to overview", function()
 end)
 
 window:AddAppearanceTab()
+report("3/3 Loading plugins…")
+for _, plugin in ipairs(config.plugins or {}) do
+    local ok, reason = pcall(function() window:Use(plugin) end)
+    if not ok then report(reason, true) end
+end
+report("Ready")
+startupLabel = nil
+startupGui:Destroy()
+startupGui = nil
+print("[Luma Ridge] Ready. Right Shift toggles the panel.")
+return window
+end
+
+local ok, result = xpcall(start, debug.traceback)
+if not ok then
+    report("Startup failed: " .. tostring(result), true)
+    if activeWindow then activeWindow:Destroy() end
+end
+return ok and result or nil
