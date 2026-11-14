@@ -6,7 +6,7 @@ Luma Ridge is a client-side Roblox UI library with touch-friendly controls, rebi
 
 ### Lynx and other executors
 
-**[Download the standalone script](./LumaRidge.executor.luau)** while signed in to GitHub. Use **Download raw file** on the file page.
+**[Download LumaRidge.executor.luau from GitHub](https://github.com/Foeky/luma-ridge/blob/main/LumaRidge.executor.luau)** while signed in. Use **Download raw file** on the file page.
 
 1. Join an experience where you’re authorized to run scripts. In Lynx, check that the Roblox client is selected under **Clients**.
 2. Open `LumaRidge.executor.luau` in Lynx with **Ctrl+O**, then press **Ctrl+Enter** to run the file. [Lynx execution guide](https://getlynx.gg/docs/guides/executing)
@@ -18,11 +18,18 @@ If Lynx reports `Unknown require: game/ReplicatedStorage/LumaRidge (Luau 1012)`,
 
 ### Run with `loadstring`
 
-In Lynx, open **Settings → Client → Open Workspace** and place the downloaded `LumaRidge.executor.luau` in that folder. Run this in the editor to launch the local copy. [Lynx workspace guide](https://getlynx.gg/docs/guides/workspace)
+For the private repository, [download the script from GitHub](https://github.com/Foeky/luma-ridge/blob/main/LumaRidge.executor.luau). In Lynx, open **Settings → Client → Open Workspace**, save the file there as `LumaRidge.executor.luau`, and run this in the editor. [Lynx workspace guide](https://getlynx.gg/docs/guides/workspace)
 
 ```lua
 local path = "LumaRidge.executor.luau"
 assert(loadstring(readfile(path), "@" .. path))()
+```
+
+If the repository is made public, you can load the raw file directly from GitHub.
+
+```lua
+local url = "https://raw.githubusercontent.com/Foeky/luma-ridge/main/LumaRidge.executor.luau"
+assert(loadstring(game:HttpGet(url), "@" .. url))()
 ```
 
 ## Try the playground
