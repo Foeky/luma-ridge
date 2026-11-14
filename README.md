@@ -12,28 +12,16 @@ Luma Ridge is a client-side Roblox UI library with touch-friendly controls, rebi
 2. Open `LumaRidge.executor.luau` in Lynx with **Ctrl+O**, then press **Ctrl+Enter** to run the file. [Lynx execution guide](https://getlynx.gg/docs/guides/executing)
 3. Press **Right Shift** or use the on-screen buttons to hide and reopen the demo.
 
-`Unknown require: game/ReplicatedStorage/LumaRidge (Luau 1012)` comes from the Studio example's import. Replace the contents of that Lynx tab with the entire standalone file, or open the standalone file in a new tab. It bundles the library and demo, creates the UI in the local player's `PlayerGui`, and runs without a network request. Running it again replaces the previous demo window.
+`LumaRidge.executor.luau` bundles the library and playground, creates the UI in the local player's `PlayerGui`, and runs without a network request. Running it again replaces the previous playground window.
 
-### Roblox Studio
+If Lynx reports `Unknown require: game/ReplicatedStorage/LumaRidge (Luau 1012)`, open the full standalone file in a fresh tab and run it.
 
-**Try the packaged demo.** Download [LumaRidgeDemo.rbxmx](./LumaRidgeDemo.rbxmx). In Studio, right-click `StarterPlayer > StarterPlayerScripts`, choose **Insert from File**, and select the model. Press **Play**.
+## Try the playground
 
-**Install the library on its own.** Create a ModuleScript called `LumaRidge` in `ReplicatedStorage` and paste in `LumaRidge.luau`. Add a LocalScript under `StarterPlayerScripts` and paste in `Demo.client.luau` or start with this example. Run one setup to show one demo window.
-
-```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LumaRidge = require(ReplicatedStorage:WaitForChild("LumaRidge"))
-
-local window = LumaRidge.new({ title = "Trail settings" })
-local tab = window:AddTab("Overview", "grid")
-tab:AddSection("Trail")
-tab:AddToggle("Show markers", "Display navigation markers on the map.", true, function(enabled)
-    print("Show markers", enabled)
-end)
-tab:AddButton("Refresh", function()
-    print("Refresh requested")
-end)
-```
+1. Open **Overview** and select **Run action** or press **F** to update the counter. Rebind the shortcut and try your new key.
+2. Open **Settings** and adjust the slider, change the map style, and enter a profile name.
+3. Open **Tests** and select **Run smoke test**. It checks slider snapping, dropdown validation, and text input, then restores your values.
+4. Drag the header and resize from the bottom-right grip. At a narrow width, try scrolling the tab rail horizontally. Hide with the minus button and reopen with **Open panel**.
 
 ## Features
 
@@ -133,17 +121,9 @@ To use the rendered icons, import `assets/Icons.png` into your Roblox experience
 
 Built-in names are `ridge`, `hide`, `arrow`, `down`, `check`, `resize`, `grid`, `sliders`, `keyboard`, and `play`.
 
-## Studio playtest checklist
+## Rebuild the playground
 
-1. In desktop Play mode, drag the header and resize from the bottom-right grip. Resize across the layout breakpoint and check tab scrolling.
-2. Press **Right Shift** to hide and reopen. Rebind the demo shortcut, try the reserved **Right Shift** key, and test Escape and Backspace.
-3. In Device Emulator, check a small phone in portrait and landscape. Switch tabs by touch, scroll the page, drag the slider, expand the dropdown, and open the native keyboard.
-4. Hide using the header button, then tap **Open panel**. With a text field focused, check that typing the bound letter enters text. Once the field loses focus, check that the shortcut works again.
-5. Run with `reducedMotion = true` and check that the window stays fully interactive.
-
-## Rebuild the executor demo
-
-Edit [Demo.client.luau](./Demo.client.luau) to customize the demo, then rebuild the standalone script from the repository folder with PowerShell 7.
+Edit [Demo.client.luau](./Demo.client.luau) to customize the playground, then rebuild the standalone script from the repository folder with PowerShell 7.
 
 ```powershell
 pwsh -NoProfile -File ./Build-Executor.ps1

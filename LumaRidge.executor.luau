@@ -1018,7 +1018,7 @@ end
 local window = LumaRidge.new({
     name = "LumaRidgeExecutorDemo",
     title = "Luma Ridge",
-    subtitle = "Component demo",
+    subtitle = "Component playground",
     toggleKey = Enum.KeyCode.RightShift,
     -- iconAtlas = "rbxassetid://YOUR_IMAGE_ID",
 })
@@ -1050,7 +1050,7 @@ local function showSelection()
     selection.Text = string.format("Profile: %s / Detail: %d%% / Map: %s", profile, detail, map)
 end
 
-settings:AddSlider("Detail", {
+local detailControl = settings:AddSlider("Detail", {
     description = "Drag the track to set the detail level.",
     min = 0, max = 100, step = 5, default = detail,
     callback = function(value)
@@ -1058,7 +1058,7 @@ settings:AddSlider("Detail", {
         showSelection()
     end,
 })
-settings:AddDropdown("Map style", {
+local mapControl = settings:AddDropdown("Map style", {
     options = { "Terrain", "Satellite", "Street" },
     default = map,
     callback = function(value)
@@ -1066,7 +1066,7 @@ settings:AddDropdown("Map style", {
         showSelection()
     end,
 })
-settings:AddInput("Profile name", {
+local profileControl = settings:AddInput("Profile name", {
     placeholder = "Name your profile",
     default = profile,
     callback = function(value)
@@ -1074,3 +1074,25 @@ settings:AddInput("Profile name", {
         showSelection()
     end,
 })
+
+local tests = window:AddTab("Tests", "play")
+tests:AddSection("Playground checks")
+local result = tests:AddLabel("Drag the header, switch tabs, or resize until the tab rail moves above the controls.")
+tests:AddButton("Run smoke test", "Check slider snapping, dropdown validation, and text input.", function()
+    local savedDetail, savedMap, savedProfile = detailControl.get(), mapControl.get(), profileControl.get()
+    local ok, reason = pcall(function()
+        detailControl.set(63, true)
+        assert(detailControl.get() == 65, "Slider should snap 63 to 65")
+        assert(mapControl.set("Street", true) and mapControl.get() == "Street", "Dropdown should select Street")
+        assert(not mapControl.set("Invalid map", true) and mapControl.get() == "Street", "Dropdown should reject an unknown option")
+        profileControl.set("Trail tester", true)
+        assert(profileControl.get() == "Trail tester", "Text input should accept a new value")
+    end)
+    detailControl.set(savedDetail, true)
+    mapControl.set(savedMap, true)
+    profileControl.set(savedProfile, true)
+    result.Text = ok and "Passed all playground checks." or ("Failed: " .. tostring(reason))
+end)
+tests:AddButton("Back to overview", function()
+    overview:Select()
+end)
