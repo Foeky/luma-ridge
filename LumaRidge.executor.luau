@@ -1356,6 +1356,64 @@ tests:AddButton("Back to overview", function()
     overview:Select()
 end)
 
+window:Use({
+    name = "Player controls",
+    setup = function(ui)
+        local tab = ui:AddTab("Player", "sliders")
+        local bridge = playerGui:FindFirstChild("LumaRidgePlayerActions")
+        if not bridge or not bridge:IsA("BindableFunction") then
+            tab:AddLabel("Install the Player server Script and LocalScript in your own experience, then reopen this panel.")
+            return
+        end
+        local panel = playerGui:FindFirstChild("LumaRidgePlayerPanel")
+        local wasEnabled = panel and panel.Enabled
+        if panel then panel.Enabled = false end
+        local status = tab:AddLabel("")
+        local function refresh()
+            status.Text = string.format("Fly %s · Noclip %s · Invisible %s",
+                players.LocalPlayer:GetAttribute("LRFly") and "on" or "off",
+                players.LocalPlayer:GetAttribute("LRNoclip") and "on" or "off",
+                players.LocalPlayer:GetAttribute("LRInvisible") and "on" or "off")
+        end
+        local function action(name, value)
+            local ok, message = bridge:Invoke(name, value)
+            if not ok then report(message, true) end
+        end
+        tab:AddSlider("Walk speed", { min = 0, max = 64, default = 16,
+            callback = function(value) action("setWalkSpeed", value) end })
+        tab:AddInput("Jump power / height", {
+            description = "Power uses 0–100. Height uses 0–25. The server selects the current jump mode.",
+            placeholder = "Enter a number",
+            callback = function(value)
+                local number = tonumber(value)
+                if number then action("setJump", number) end
+            end,
+        })
+        tab:AddSlider("Fly speed", { min = 1, max = 100, default = 40,
+            callback = function(value) action("setFlySpeed", value) end })
+        tab:AddButton("Toggle fly", "WASD, Space and Ctrl", function() action("toggleFly") end)
+        tab:AddButton("Toggle noclip", function() action("toggleNoclip") end)
+        tab:AddButton("Toggle invisible", function() action("toggleInvisible") end)
+        if players.LocalPlayer:GetAttribute("LRGravityAllowed") then
+            tab:AddInput("Experience gravity", {
+                description = "Changes gravity for everyone. Server range 0–300.",
+                callback = function(value)
+                    local number = tonumber(value)
+                    if number then action("setGravity", number) end
+                end,
+            })
+        end
+        local connections = {}
+        for _, attribute in ipairs({ "LRFly", "LRNoclip", "LRInvisible" }) do
+            table.insert(connections, players.LocalPlayer:GetAttributeChangedSignal(attribute):Connect(refresh))
+        end
+        refresh()
+        return function()
+            for _, connection in ipairs(connections) do connection:Disconnect() end
+            if panel and panel.Parent then panel.Enabled = wasEnabled end
+        end
+    end,
+})
 window:AddAppearanceTab()
 report("3/3 Loading plugins…")
 for _, plugin in ipairs(config.plugins or {}) do

@@ -34,6 +34,8 @@ Startup displays progress and downloads `assets/Icons.png` into the executor wor
 - **Settings** stays at the bottom-left. Choose **Contours**, **Grid**, **Dots**, **Gradient**, or **Solid**, and adjust text size, animation speed, and pattern visibility. Enable **Debug** for the on-screen diagnostic log and console messages.
 - **Unload** removes the panel and its event connections and calls plugin cleanup functions.
 
+The built-in **Player** tab connects to the optional server-authoritative controls installed in your own experience. Follow the [Player setup instructions](./player/README.md). These scripts use standard Roblox APIs.
+
 ## Plugins
 
 Set configuration before running the framework. Plugins receive the window and a log function. Return a cleanup function for any connections or objects your plugin creates. Each plugin name can be loaded once per window. A failed plugin is reported while other plugins continue.
