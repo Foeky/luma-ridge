@@ -1,0 +1,997 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Library = {}
+
+local COLORS = {
+    background = Color3.fromRGB(13, 23, 28),
+    rail = Color3.fromRGB(15, 29, 32),
+    surface = Color3.fromRGB(24, 42, 46),
+    hover = Color3.fromRGB(35, 57, 59),
+    border = Color3.fromRGB(66, 96, 95),
+    text = Color3.fromRGB(241, 250, 246),
+    secondary = Color3.fromRGB(176, 199, 196),
+    accent = Color3.fromRGB(167, 238, 197),
+    ink = Color3.fromRGB(11, 38, 31),
+}
+
+local DEFAULT_FONTS = {
+    display = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Bold),
+    title = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Bold),
+    body = Font.new("rbxasset://fonts/families/Nunito.json"),
+}
+
+-- Each entry is a set of rounded polylines in a 24×24 view box.
+-- The optional PNG atlas in assets/ uses the same paths and order.
+local ICONS = {
+    { "ridge", { { 2, 17, 8, 7, 12, 13, 16, 5, 22, 17 }, { 5, 21, 19, 21 } } },
+    { "hide", { { 5, 12, 19, 12 } } },
+    { "arrow", { { 9, 5, 16, 12, 9, 19 } } },
+    { "down", { { 5, 9, 12, 16, 19, 9 } } },
+    { "check", { { 4, 12, 9, 17, 20, 6 } } },
+    { "resize", { { 8, 20, 20, 8 }, { 14, 20, 20, 14 } } },
+    { "grid", { { 4, 4, 10, 4, 10, 10, 4, 10, 4, 4 }, { 14, 4, 20, 4, 20, 10, 14, 10, 14, 4 },
+        { 4, 14, 10, 14, 10, 20, 4, 20, 4, 14 }, { 14, 14, 20, 14, 20, 20, 14, 20, 14, 14 } } },
+    { "sliders", { { 4, 6, 8, 6 }, { 12, 6, 20, 6 }, { 10, 3, 10, 9 },
+        { 4, 12, 14, 12 }, { 18, 12, 20, 12 }, { 16, 9, 16, 15 },
+        { 4, 18, 7, 18 }, { 11, 18, 20, 18 }, { 9, 15, 9, 21 } } },
+    { "keyboard", { { 3, 6, 21, 6, 21, 18, 3, 18, 3, 6 },
+        { 7, 10, 8, 10 }, { 11.5, 10, 12.5, 10 }, { 16, 10, 17, 10 }, { 8, 14, 16, 14 } } },
+    { "play", { { 8, 4, 20, 12, 8, 20, 8, 4 } } },
+}
+
+local function make(class, parent, properties)
+    local object = Instance.new(class)
+    for name, value in pairs(properties) do
+        object[name] = value
+    end
+    object.Parent = parent
+    return object
+end
+
+local function corner(parent, radius)
+    make("UICorner", parent, { CornerRadius = UDim.new(0, radius) })
+end
+
+local function frame(parent, properties)
+    local panel = make("Frame", nil, { BackgroundTransparency = 1, BorderSizePixel = 0 })
+    for name, value in pairs(properties) do
+        panel[name] = value
+    end
+    panel.Parent = parent
+    return panel
+end
+
+local function outline(parent, color, transparency)
+    return make("UIStroke", parent, {
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        Color = color, Transparency = transparency, Thickness = 1,
+    })
+end
+
+local function list(parent, gap)
+    return make("UIListLayout", parent, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, gap),
+    })
+end
+
+local function padding(parent, x, y)
+    make("UIPadding", parent, {
+        PaddingLeft = UDim.new(0, x), PaddingRight = UDim.new(0, x),
+        PaddingTop = UDim.new(0, y), PaddingBottom = UDim.new(0, y),
+    })
+end
+
+local function line(parent, ax, ay, bx, by, thickness, color, transparency)
+    local dx, dy = bx - ax, by - ay
+    local segment = frame(parent, {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset((ax + bx) / 2, (ay + by) / 2),
+        Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy) + thickness, thickness),
+        Rotation = math.deg(math.atan2(dy, dx)),
+        BackgroundColor3 = color,
+        BackgroundTransparency = transparency,
+    })
+    corner(segment, thickness / 2)
+end
+
+local function addIcon(parent, name, size, color, atlas)
+    for index, icon in ipairs(ICONS) do
+        if icon[1] ~= name then
+            continue
+        end
+        if atlas then
+            return make("ImageLabel", parent, {
+                Name = name, BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size),
+                Image = atlas, ImageColor3 = color,
+                ImageRectSize = Vector2.new(96, 96),
+                ImageRectOffset = Vector2.new((index - 1) % 4 * 96, math.floor((index - 1) / 4) * 96),
+            })
+        end
+        local holder = frame(parent, { Name = name, Size = UDim2.fromOffset(size, size) })
+        local scale = size / 24
+        for _, path in ipairs(icon[2]) do
+            for point = 1, #path - 2, 2 do
+                line(holder, path[point] * scale, path[point + 1] * scale,
+                    path[point + 2] * scale, path[point + 3] * scale, 1.8 * scale, color, 0)
+            end
+        end
+        return holder
+    end
+    return make("ImageLabel", parent, {
+        Name = "CustomIcon", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size),
+        Image = name, ScaleType = Enum.ScaleType.Fit,
+    })
+end
+
+local function positionRight(object, inset)
+    object.AnchorPoint = Vector2.new(1, 0.5)
+    object.Position = UDim2.new(1, -inset, 0.5, 0)
+end
+
+local function scroll(parent, name, axis, color)
+    return make("ScrollingFrame", parent, {
+        Name = name, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
+        CanvasSize = UDim2.new(), AutomaticCanvasSize = axis, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = color,
+        ScrollingDirection = axis == Enum.AutomaticSize.X and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y,
+    })
+end
+
+local function merge(defaults, overrides)
+    local result = table.clone(defaults)
+    for name, value in pairs(overrides or {}) do
+        result[name] = value
+    end
+    return result
+end
+
+local function pointerType(input)
+    return input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function keyCode(value)
+    return typeof(value) == "EnumItem" and value.EnumType == Enum.KeyCode and value ~= Enum.KeyCode.Unknown
+end
+
+local function invoke(callback, ...)
+    if callback then
+        task.spawn(callback, ...)
+    end
+end
+
+function Library.new(options)
+    options = options or {}
+    local color = merge(COLORS, options.theme)
+    local font = merge(DEFAULT_FONTS, options.fonts)
+    local player = Players.LocalPlayer
+    assert(player, "Require LumaRidge from a LocalScript on the client")
+    local parent = options.parent or player:WaitForChild("PlayerGui")
+    local atlas = options.iconAtlas
+    local desiredSize = options.size or Vector2.new(780, 540)
+    local minSize = options.minSize or Vector2.new(580, 375)
+    local maxSize = options.maxSize or Vector2.new(1100, 820)
+    local toggleKey = options.toggleKey
+    if toggleKey == nil then
+        toggleKey = Enum.KeyCode.RightShift
+    end
+
+    local window = {}
+    local connections = {}
+    local tabs = {}
+    local bindings = {}
+    local activeTab, capture, pointer
+    local destroyed, visible, compact = false, true, false
+    local animated = options.animateBackground ~= false
+    local reducedMotion = options.reducedMotion == true
+    local transition = TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tweens = setmetatable({}, { __mode = "k" })
+
+    local function connect(signal, fn)
+        local connection = signal:Connect(fn)
+        table.insert(connections, connection)
+        return connection
+    end
+
+    local function animate(target, properties)
+        local previous = tweens[target]
+        if previous then
+            previous:Cancel()
+            previous:Destroy()
+            tweens[target] = nil
+        end
+        if reducedMotion then
+            for name, value in pairs(properties) do
+                target[name] = value
+            end
+            return
+        end
+        local tween = TweenService:Create(target, transition, properties)
+        tweens[target] = tween
+        tween:Play()
+    end
+
+    local function text(parentObject, value, size, face, tint, wrap)
+        return make("TextLabel", parentObject, {
+            BackgroundTransparency = 1, Text = tostring(value), FontFace = face or font.body,
+            TextColor3 = tint or color.text, TextSize = size,
+            TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = wrap == true,
+            TextTruncate = wrap and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
+        })
+    end
+
+    local function button(parentObject, name, radius)
+        local object = make("TextButton", parentObject, {
+            Name = name, Text = "", BackgroundColor3 = color.surface, BorderSizePixel = 0,
+            AutoButtonColor = false, Selectable = true,
+        })
+        corner(object, radius or 12)
+        return object
+    end
+
+    local function interactive(object, callback, idle)
+        local hovered, selected, focused = false, false, false
+        local normalColor = idle or color.surface
+        local edge = outline(object, color.border, 0.52)
+        local function refresh()
+            animate(object, { BackgroundColor3 = (hovered or selected or focused) and color.hover or normalColor })
+            edge.Color = (selected or focused) and color.accent or color.border
+            edge.Transparency = (selected or focused) and 0.15 or 0.52
+        end
+        object.BackgroundColor3 = normalColor
+        connect(object.MouseEnter, function()
+            hovered = true
+            refresh()
+        end)
+        connect(object.MouseLeave, function()
+            hovered = false
+            refresh()
+        end)
+        connect(object.SelectionGained, function()
+            focused = true
+            refresh()
+        end)
+        connect(object.SelectionLost, function()
+            focused = false
+            refresh()
+        end)
+        connect(object.Activated, callback)
+        return function(value)
+            selected = value
+            refresh()
+        end
+    end
+
+    local gui = make("ScreenGui", nil, {
+        Name = options.name or "LumaRidge", ResetOnSpawn = false,
+        ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = options.displayOrder or 100,
+    })
+    local safeArea = frame(gui, { Name = "SafeArea", Size = UDim2.fromScale(1, 1) })
+    local main = frame(safeArea, {
+        Name = "Window", BackgroundColor3 = color.background, BackgroundTransparency = 0, Active = true,
+    })
+    corner(main, 20)
+    outline(main, color.border, 0.35)
+    local shellGradient = make("UIGradient", nil, {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, color.background),
+            ColorSequenceKeypoint.new(0.5, color.background:Lerp(color.border, 0.37)),
+            ColorSequenceKeypoint.new(1, color.background),
+        }),
+        Rotation = 28, Offset = Vector2.new(-0.65, -0.15),
+    })
+    local backdrop = frame(main, {
+        Name = "Background", Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0,
+    })
+    corner(backdrop, 20)
+    shellGradient.Parent = backdrop
+    local backgroundTween = TweenService:Create(shellGradient,
+        TweenInfo.new(12, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        { Offset = Vector2.new(0.62, 0.18) })
+
+    -- The contour geometry is fixed. Resize and animation never rebuild the lines.
+    local contours = frame(backdrop, {
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+        Size = UDim2.fromOffset(550, 460),
+    })
+    local contourScale = make("UIScale", contours, { Scale = 1 })
+    local contourAlpha = math.clamp(options.topoTransparency or 0.82, 0, 1)
+    for level = 0, 9 do
+        local rx, ry = 65 + level * 19, 48 + level * 15
+        local function point(angle)
+            local bend = 1 + 0.14 * math.sin(angle * 3 + 1) + 0.08 * math.cos(angle * 2)
+            return 275 + rx * math.cos(angle) * bend, 230 + ry * math.sin(angle) * bend
+        end
+        local x, y = point(0)
+        for step = 1, 22 do
+            local nextX, nextY = point(step / 22 * math.pi * 2)
+            line(contours, x, y, nextX, nextY, 1.1, color.accent, contourAlpha)
+            x, y = nextX, nextY
+        end
+    end
+
+    local header = frame(main, {
+        Name = "Header", Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 64),
+        BackgroundColor3 = color.rail, BackgroundTransparency = 0.05, ZIndex = 2,
+    })
+    corner(header, 16)
+    local badge = frame(header, {
+        Position = UDim2.fromOffset(10, 12), Size = UDim2.fromOffset(40, 40),
+        BackgroundColor3 = color.accent, BackgroundTransparency = 0,
+    })
+    corner(badge, 12)
+    local mark = addIcon(badge, options.icon or "ridge", 25, color.ink, atlas)
+    mark.Position = UDim2.fromOffset(7.5, 7.5)
+    local title = text(header, options.title or "Luma Ridge", 20, font.display)
+    title.Position = UDim2.fromOffset(61, 10)
+    title.Size = UDim2.new(1, -120, 0, 25)
+    local subtitle = text(header, options.subtitle or "Interface library", 13, font.body, color.secondary)
+    subtitle.Position = UDim2.fromOffset(62, 35)
+    subtitle.Size = UDim2.new(1, -121, 0, 18)
+
+    local dragRegion = frame(header, { Name = "DragRegion", Size = UDim2.new(1, -62, 1, 0), Active = true })
+    local hide = button(header, "HideWindow")
+    hide.Size = UDim2.fromOffset(44, 44)
+    positionRight(hide, 8)
+    addIcon(hide, "hide", 20, color.text, atlas).Position = UDim2.fromOffset(12, 12)
+
+    local rail = frame(main, {
+        Name = "TabRail", BackgroundColor3 = color.rail, BackgroundTransparency = 0.18, ZIndex = 2,
+    })
+    corner(rail, 14)
+    local navigation = scroll(rail, "Tabs", Enum.AutomaticSize.Y, color.border)
+    navigation.Position = UDim2.fromOffset(10, 8)
+    navigation.Size = UDim2.new(1, -20, 1, -16)
+    local tabLayout = list(navigation, 6)
+    local content = frame(main, { Name = "Pages", ZIndex = 2 })
+    local resize = button(main, "ResizeWindow", 8)
+    resize.AnchorPoint = Vector2.new(1, 1)
+    resize.Position = UDim2.new(1, -7, 1, -5)
+    resize.Size = UDim2.fromOffset(27, 27)
+    resize.Selectable = false
+    resize.ZIndex = 3
+    addIcon(resize, "resize", 16, color.secondary, atlas).Position = UDim2.fromOffset(5, 5)
+
+    local open = button(safeArea, "ShowWindow", 14)
+    open.AnchorPoint = Vector2.new(1, 0)
+    open.Position = UDim2.new(1, -10, 0, 8)
+    open.Size = UDim2.fromOffset(138, 48)
+    open.Visible = false
+    addIcon(open, options.icon or "ridge", 20, color.accent, atlas).Position = UDim2.fromOffset(12, 14)
+    local openLabel = text(open, options.openLabel or "Open panel", 15, font.title)
+    openLabel.Position = UDim2.fromOffset(40, 0)
+    openLabel.Size = UDim2.new(1, -47, 1, 0)
+
+    local function clearCapture()
+        local previous = capture
+        capture = nil
+        if previous then
+            previous.render()
+        end
+    end
+
+    local function stopPointer()
+        local previous = pointer
+        pointer = nil
+        if previous and previous.finish then
+            previous.finish()
+        end
+    end
+
+    local function syncAnimation()
+        if animated and visible and not reducedMotion then
+            backgroundTween:Play()
+        else
+            backgroundTween:Pause()
+        end
+    end
+
+    function window:SetVisible(value)
+        if destroyed then return end
+        visible = value == true
+        main.Visible = visible
+        open.Visible = not visible
+        syncAnimation()
+        if not visible then
+            clearCapture()
+            stopPointer()
+            local box = UserInputService:GetFocusedTextBox()
+            if box and box:IsDescendantOf(main) then
+                box:ReleaseFocus()
+            end
+        end
+    end
+
+    function window:IsVisible()
+        return visible and not destroyed
+    end
+
+    function window:Toggle()
+        self:SetVisible(not visible)
+    end
+
+    function window:SetBackgroundMotion(value)
+        if destroyed then return end
+        animated = value == true
+        syncAnimation()
+    end
+
+    function window:GetGui()
+        return gui
+    end
+
+    local function dispose()
+        if destroyed then return end
+        destroyed = true
+        stopPointer()
+        capture = nil
+        backgroundTween:Cancel()
+        backgroundTween:Destroy()
+        for _, tween in pairs(tweens) do
+            tween:Cancel()
+            tween:Destroy()
+        end
+        for _, connection in ipairs(connections) do
+            connection:Disconnect()
+        end
+        table.clear(tweens)
+        table.clear(connections)
+        table.clear(bindings)
+    end
+
+    function window:Destroy()
+        if destroyed then return end
+        dispose()
+        gui:Destroy()
+    end
+
+    connect(gui.Destroying, dispose)
+    interactive(hide, function() window:SetVisible(false) end)
+    interactive(open, function() window:SetVisible(true) end)
+
+    local manualPosition
+    local actualPosition, actualSize
+    local MARGIN = 8
+    local function layout()
+        local area = safeArea.AbsoluteSize
+        if area.X <= 2 * MARGIN or area.Y <= 2 * MARGIN then return end
+        local available = area - Vector2.new(2 * MARGIN, 2 * MARGIN)
+        local maxX, maxY = math.min(maxSize.X, available.X), math.min(maxSize.Y, available.Y)
+        local width = math.clamp(desiredSize.X, math.min(minSize.X, maxX), maxX)
+        local height = math.clamp(desiredSize.Y, math.min(minSize.Y, maxY), maxY)
+        actualSize = Vector2.new(width, height)
+        local fitScreen = area.X < 680 or area.Y < 410
+        if fitScreen then
+            actualSize = available
+        end
+        local wasCompact = compact
+        compact = actualSize.X < 620
+        local centered = (area - actualSize) / 2
+        local point = (not fitScreen and manualPosition) or centered
+        actualPosition = Vector2.new(
+            math.clamp(point.X, MARGIN, area.X - actualSize.X - MARGIN),
+            math.clamp(point.Y, MARGIN, area.Y - actualSize.Y - MARGIN)
+        )
+        main.Position = UDim2.fromOffset(actualPosition.X, actualPosition.Y)
+        main.Size = UDim2.fromOffset(actualSize.X, actualSize.Y)
+        contourScale.Scale = math.max(0.01, math.min(1, (actualSize.X - 24) / 550, (actualSize.Y - 24) / 460))
+        resize.Visible = not fitScreen
+        dragRegion.Active = not fitScreen
+
+        if compact then
+            rail.Position = UDim2.fromOffset(4, 72)
+            rail.Size = UDim2.new(1, -8, 0, 62)
+            content.Position = UDim2.fromOffset(0, 134)
+            content.Size = UDim2.new(1, 0, 1, -138)
+        else
+            rail.Position = UDim2.fromOffset(4, 72)
+            rail.Size = UDim2.new(0, 164, 1, -76)
+            content.Position = UDim2.fromOffset(171, 72)
+            content.Size = UDim2.new(1, -171, 1, -77)
+        end
+        local axis = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
+        navigation.AutomaticCanvasSize = axis
+        navigation.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
+        tabLayout.FillDirection = compact and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
+        if compact ~= wasCompact then
+            navigation.CanvasPosition = Vector2.zero
+        end
+        for _, tab in ipairs(tabs) do
+            tab.layout()
+        end
+    end
+
+    local function beginPointer(input, move, finish)
+        if pointer or not pointerType(input) then return false end
+        pointer = { input = input, move = move, finish = finish }
+        return true
+    end
+
+    local function matchesPointer(input, moving)
+        if not pointer then return false end
+        if pointer.input.UserInputType == Enum.UserInputType.Touch then
+            return input == pointer.input
+        end
+        local inputType = moving and Enum.UserInputType.MouseMovement or Enum.UserInputType.MouseButton1
+        return input.UserInputType == inputType
+    end
+
+    local function position(input)
+        return Vector2.new(input.Position.X, input.Position.Y)
+    end
+
+    connect(safeArea:GetPropertyChangedSignal("AbsoluteSize"), function()
+        stopPointer()
+        layout()
+    end)
+    connect(dragRegion.InputBegan, function(input)
+        if not resize.Visible or not actualPosition then return end
+        local start, origin = actualPosition, position(input)
+        beginPointer(input, function(current)
+            manualPosition = start + position(current) - origin
+            layout()
+        end)
+    end)
+    connect(resize.InputBegan, function(input)
+        if not actualSize then return end
+        local start, origin = actualSize, position(input)
+        beginPointer(input, function(current)
+            manualPosition = manualPosition or actualPosition
+            local size = start + position(current) - origin
+            desiredSize = Vector2.new(math.max(1, size.X), math.max(1, size.Y))
+            layout()
+        end)
+    end)
+    connect(UserInputService.InputChanged, function(input)
+        if matchesPointer(input, true) then
+            pointer.move(input)
+        end
+    end)
+    connect(UserInputService.InputEnded, function(input)
+        if matchesPointer(input, false) then
+            stopPointer()
+        end
+    end)
+    connect(UserInputService.WindowFocusReleased, function()
+        stopPointer()
+        clearCapture()
+    end)
+
+    connect(UserInputService.InputBegan, function(input, processed)
+        if input.UserInputType ~= Enum.UserInputType.Keyboard or UserInputService:GetFocusedTextBox() then return end
+        local key = input.KeyCode
+        if capture then
+            local current = capture
+            if key == Enum.KeyCode.Escape then
+                clearCapture()
+            elseif key == Enum.KeyCode.Backspace then
+                clearCapture()
+                current.set(nil)
+            elseif not processed and keyCode(key) then
+                local ok, message = current.set(key)
+                if ok then
+                    clearCapture()
+                else
+                    current.label.Text = message
+                end
+            end
+            return
+        end
+        if processed then return end
+        if key == toggleKey then
+            window:Toggle()
+        elseif visible and bindings[key] then
+            bindings[key].run()
+        end
+    end)
+
+    local function selectTab(target)
+        if activeTab == target then return end
+        stopPointer()
+        clearCapture()
+        activeTab = target
+        for _, tab in ipairs(tabs) do
+            local selected = tab == target
+            tab.page.Visible = selected
+            tab.select(selected)
+            tab.label.TextColor3 = selected and color.accent or color.secondary
+        end
+    end
+
+    function window:AddTab(name, icon)
+        assert(not destroyed, "The Luma Ridge window has been destroyed")
+        local order = #tabs + 1
+        local tabButton = button(navigation, tostring(name))
+        tabButton.LayoutOrder = order
+        if icon then
+            addIcon(tabButton, icon, 16, color.accent, atlas).Position = UDim2.fromOffset(10, 14)
+        end
+        local tabLabel = text(tabButton, name, 15, font.title, color.secondary)
+        local labelInset = icon and 34 or 12
+        tabLabel.Position = UDim2.fromOffset(labelInset, 0)
+        tabLabel.Size = UDim2.new(1, -labelInset - 8, 1, 0)
+
+        local page = scroll(content, tostring(name) .. "Page", Enum.AutomaticSize.Y, color.border)
+        page.Visible = false
+        local stack = frame(page, {
+            Name = "Controls", Position = UDim2.fromOffset(12, 10),
+            Size = UDim2.new(1, -27, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        })
+        list(stack, 8)
+        -- The trailing space keeps the last control clear of the desktop resize grip.
+        frame(stack, { Size = UDim2.fromOffset(1, 22), LayoutOrder = 2147483647 })
+        local tab = { page = page, label = tabLabel }
+        function tab.layout()
+            tabButton.Size = compact and UDim2.fromOffset(143, 44) or UDim2.new(1, -4, 0, 44)
+        end
+        tab.select = interactive(tabButton, function() selectTab(tab) end, color.rail)
+        tabs[order] = tab
+        tab.layout()
+        if order == 1 then selectTab(tab) end
+
+        local api = {}
+        local itemOrder = 0
+
+        local function place(object)
+            assert(not destroyed, "The Luma Ridge window has been destroyed")
+            itemOrder += 1
+            object.LayoutOrder = itemOrder
+            object.Parent = stack
+            return object
+        end
+
+        local function wrapped(parentObject, value, size, face, tint)
+            local label = text(parentObject, value, size, face, tint, true)
+            label.Size = UDim2.new(1, 0, 0, 0)
+            label.AutomaticSize = Enum.AutomaticSize.Y
+            return label
+        end
+
+        local function copy(parentObject, titleText, description)
+            wrapped(parentObject, titleText, 16, font.title).LayoutOrder = 1
+            if description and description ~= "" then
+                wrapped(parentObject, description, 14, font.body, color.secondary).LayoutOrder = 2
+            end
+        end
+
+        local function action(nameText, description, reserved)
+            local row = button(nil, tostring(nameText))
+            row.Size = UDim2.new(1, 0, 0, 48)
+            row.AutomaticSize = Enum.AutomaticSize.Y
+            local labels = frame(row, {
+                Size = UDim2.new(1, -reserved - 20, 0, 48),
+                Position = UDim2.fromOffset(12, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            })
+            local arrangement = list(labels, 1)
+            arrangement.VerticalAlignment = Enum.VerticalAlignment.Center
+            padding(labels, 0, 8)
+            copy(labels, nameText, description)
+            return place(row)
+        end
+
+        local function card(nameText, description)
+            local panel = frame(nil, {
+                Name = tostring(nameText), Size = UDim2.new(1, 0, 0, 0),
+                BackgroundColor3 = color.surface, BackgroundTransparency = 0,
+                AutomaticSize = Enum.AutomaticSize.Y,
+            })
+            corner(panel, 12)
+            outline(panel, color.border, 0.52)
+            padding(panel, 12, 10)
+            list(panel, 5)
+            copy(panel, nameText, description)
+            return place(panel)
+        end
+
+        function api:Select()
+            if not destroyed then selectTab(tab) end
+        end
+
+        function api:AddSection(value)
+            local heading = wrapped(nil, value, 17, font.display, color.accent)
+            return place(heading)
+        end
+
+        function api:AddLabel(value)
+            return place(wrapped(nil, value, 15, font.body, color.secondary))
+        end
+
+        function api:AddButton(label, description, callback)
+            if type(description) == "function" then
+                callback, description = description, nil
+            end
+            local row = action(label, description, 25)
+            positionRight(addIcon(row, "arrow", 17, color.accent, atlas), 13)
+            interactive(row, function() invoke(callback) end)
+            return row
+        end
+
+        function api:AddToggle(label, description, default, callback)
+            local value = default == true
+            local row = action(label, description, 53)
+            local track = frame(row, { Size = UDim2.fromOffset(43, 24), BackgroundTransparency = 0 })
+            positionRight(track, 12)
+            corner(track, 12)
+            local thumb = frame(track, { Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 0 })
+            corner(thumb, 9)
+            local function render(instant)
+                local trackColor = value and color.accent or color.rail
+                local thumbColor = value and color.ink or color.secondary
+                local thumbPosition = UDim2.fromOffset(value and 22 or 3, 3)
+                if instant then
+                    track.BackgroundColor3 = trackColor
+                    thumb.BackgroundColor3 = thumbColor
+                    thumb.Position = thumbPosition
+                else
+                    animate(track, { BackgroundColor3 = trackColor })
+                    animate(thumb, { Position = thumbPosition, BackgroundColor3 = thumbColor })
+                end
+            end
+            local function set(nextValue, silent)
+                if destroyed then return end
+                value = nextValue == true
+                render(false)
+                if not silent then invoke(callback, value) end
+            end
+            render(true)
+            interactive(row, function() set(not value) end)
+            return { set = set, get = function() return value end }
+        end
+
+        function api:AddSlider(label, config)
+            config = config or {}
+            local minimum, maximum, step = config.min or 0, config.max or 100, config.step or 1
+            local span = maximum - minimum
+            assert(span > 0 and span < math.huge,
+                "Slider requires finite max > min")
+            assert(step > 0 and step < math.huge and span / step < math.huge,
+                "Slider requires a positive finite step")
+            local panel = card(label, config.description)
+            local control = frame(panel, { Size = UDim2.new(1, 0, 0, 46), LayoutOrder = 3 })
+            local input = button(control, "SliderTrack", 10)
+            input.Size = UDim2.new(1, -66, 1, 0)
+            input.BackgroundColor3 = color.rail
+            outline(input, color.border, 0.52)
+            local track = frame(input, {
+                Position = UDim2.new(0, 12, 0.5, -3), Size = UDim2.new(1, -24, 0, 6),
+                BackgroundColor3 = color.border, BackgroundTransparency = 0,
+            })
+            corner(track, 3)
+            local fill = frame(track, { BackgroundColor3 = color.accent, BackgroundTransparency = 0 })
+            corner(fill, 3)
+            local knob = frame(track, {
+                AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14),
+                BackgroundColor3 = color.accent, BackgroundTransparency = 0,
+            })
+            corner(knob, 7)
+            local readout = text(control, "", 14, font.title, color.accent)
+            positionRight(readout, 0)
+            readout.Size = UDim2.fromOffset(61, 40)
+            readout.TextXAlignment = Enum.TextXAlignment.Right
+
+            local value
+            local function set(nextValue, silent)
+                if destroyed then return end
+                assert(type(nextValue) == "number" and nextValue == nextValue, "Slider value must be a number")
+                local clamped = math.clamp(nextValue, minimum, maximum)
+                local lastStep = math.floor(span / step)
+                local index = math.min(lastStep, math.floor((clamped - minimum) / step + 0.5))
+                local snapped = minimum + index * step
+                if maximum - clamped <= math.abs(clamped - snapped) then snapped = maximum end
+                nextValue = math.clamp(snapped, minimum, maximum)
+                if value == nextValue then return end
+                value = nextValue
+                local fraction = (value - minimum) / span
+                fill.Size = UDim2.fromScale(fraction, 1)
+                knob.Position = UDim2.fromScale(fraction, 0.5)
+                readout.Text = string.format("%.6g", value)
+                if not silent then invoke(config.callback, value) end
+            end
+            set(config.default or minimum, true)
+
+            local function move(current)
+                if track.AbsoluteSize.X <= 0 then return end
+                local fraction = (current.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
+                set(minimum + fraction * span)
+            end
+            connect(input.InputBegan, function(event)
+                if beginPointer(event, move, function() page.ScrollingEnabled = true end) then
+                    page.ScrollingEnabled = false
+                    move(event)
+                end
+            end)
+            connect(input.Activated, function(event)
+                if not pointerType(event) then
+                    set(value >= maximum and minimum or math.min(maximum, value + step))
+                end
+            end)
+            connect(input.InputBegan, function(event)
+                if event.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                if event.KeyCode == Enum.KeyCode.Left then
+                    local lastStep = minimum + math.max(0, math.ceil(span / step) - 1) * step
+                    set(value >= maximum and lastStep or value - step)
+                elseif event.KeyCode == Enum.KeyCode.Right then
+                    set(value + step)
+                end
+            end)
+            return { set = set, get = function() return value end }
+        end
+
+        function api:AddInput(label, config)
+            config = config or {}
+            local panel = card(label, config.description)
+            local box = make("TextBox", panel, {
+                Name = "Input", LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 46),
+                BackgroundColor3 = color.rail, BorderSizePixel = 0,
+                Text = tostring(config.default or ""), PlaceholderText = config.placeholder or "",
+                PlaceholderColor3 = color.secondary, TextColor3 = color.text, FontFace = font.body,
+                TextSize = 16, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left,
+                MultiLine = false, Selectable = true,
+            })
+            corner(box, 9)
+            padding(box, 10, 0)
+            local edge = outline(box, color.border, 0.45)
+            local value = box.Text
+            connect(box.Focused, function()
+                clearCapture()
+                edge.Color = color.accent
+            end)
+            connect(box.FocusLost, function(enterPressed)
+                if destroyed then return end
+                edge.Color = color.border
+                if box.Text ~= value or enterPressed then
+                    value = box.Text
+                    invoke(config.callback, value, enterPressed)
+                end
+            end)
+            return {
+                input = box,
+                get = function() return box.Text end,
+                set = function(nextValue, silent)
+                    if destroyed then return end
+                    value = tostring(nextValue or "")
+                    box.Text = value
+                    if not silent then invoke(config.callback, value, false) end
+                end,
+            }
+        end
+
+        function api:AddDropdown(label, config)
+            config = config or {}
+            local choices = table.clone(config.options or {})
+            local checked = {}
+            for _, choice in ipairs(choices) do
+                assert(type(choice) == "string" and choice ~= "" and not checked[choice],
+                    "Dropdown choices must be unique nonempty strings")
+                checked[choice] = true
+            end
+            assert(config.default == nil or checked[config.default], "Dropdown default must be in options")
+            local value = config.default
+            local panel = card(label, config.description)
+            local select = button(panel, "Dropdown", 9)
+            select.LayoutOrder = 3
+            select.Size = UDim2.new(1, 0, 0, 46)
+            local readout = text(select, "", 15, font.title)
+            readout.Position = UDim2.fromOffset(10, 0)
+            readout.Size = UDim2.new(1, -40, 1, 0)
+            local chevron = addIcon(select, "down", 16, color.accent, atlas)
+            positionRight(chevron, 11)
+            local menu = frame(panel, {
+                Name = "Choices", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y, Visible = false,
+            })
+            list(menu, 4)
+            local rows = {}
+            local function setExpanded(expanded)
+                menu.Visible = expanded and #choices > 0
+                chevron.Rotation = menu.Visible and 180 or 0
+            end
+            local function render()
+                readout.Text = value or config.placeholder or (#choices > 0 and "Choose an option" or "No options")
+                for choice, row in pairs(rows) do
+                    row.check.Visible = choice == value
+                    row.select(choice == value)
+                end
+            end
+            local function set(nextValue, silent)
+                if destroyed then return false end
+                if nextValue ~= nil and not checked[nextValue] then return false end
+                value = nextValue
+                setExpanded(false)
+                render()
+                if not silent then invoke(config.callback, value) end
+                return true
+            end
+            for index, choice in ipairs(choices) do
+                local item = button(menu, choice, 8)
+                item.LayoutOrder = index
+                item.Size = UDim2.new(1, 0, 0, 44)
+                local nameLabel = text(item, choice, 15, font.body)
+                nameLabel.Position = UDim2.fromOffset(10, 0)
+                nameLabel.Size = UDim2.new(1, -36, 1, 0)
+                local check = addIcon(item, "check", 15, color.accent, atlas)
+                positionRight(check, 10)
+                rows[choice] = { check = check, select = interactive(item, function() set(choice) end, color.rail) }
+            end
+            interactive(select, function() setExpanded(not menu.Visible) end, color.rail)
+            render()
+            return { set = set, get = function() return value end }
+        end
+
+        function api:AddKeybind(label, config)
+            config = config or {}
+            local value
+            local panel = card(label, config.description)
+            local controls = frame(panel, { Size = UDim2.new(1, 0, 0, 46), LayoutOrder = 3 })
+            local rebind = button(controls, "Rebind", 9)
+            rebind.Size = UDim2.new(1, -78, 1, 0)
+            local readout = text(rebind, "", 14, font.title, color.accent)
+            readout.Position = UDim2.fromOffset(10, 0)
+            readout.Size = UDim2.new(1, -18, 1, 0)
+            local run = button(controls, "Run", 9)
+            positionRight(run, 0)
+            run.Size = UDim2.fromOffset(70, 46)
+            local runLabel = text(run, "Run", 15, font.title)
+            runLabel.Size = UDim2.fromScale(1, 1)
+            runLabel.TextXAlignment = Enum.TextXAlignment.Center
+            local binding = { label = readout }
+
+            function binding.run()
+                if not destroyed then invoke(config.callback, value) end
+            end
+
+            function binding.render()
+                if capture == binding then
+                    readout.Text = "Press a key…"
+                else
+                    readout.Text = value and value.Name or "Unbound"
+                end
+            end
+
+            function binding.set(nextValue, silent)
+                if destroyed then return false, "Window closed" end
+                if nextValue ~= nil and (not keyCode(nextValue)
+                    or nextValue == Enum.KeyCode.Escape or nextValue == Enum.KeyCode.Backspace) then
+                    return false, "Invalid key"
+                end
+                if nextValue ~= nil and (nextValue == toggleKey
+                    or (bindings[nextValue] and bindings[nextValue] ~= binding)) then
+                    return false, "Key already in use"
+                end
+                if value then bindings[value] = nil end
+                value = nextValue
+                if value then bindings[value] = binding end
+                binding.render()
+                if not silent then invoke(config.onChanged, value) end
+                return true
+            end
+
+            local ok, errorMessage = binding.set(config.default, true)
+            if not ok then readout.Text = errorMessage end
+            interactive(run, binding.run, color.rail)
+            interactive(rebind, function()
+                local wasCapturing = capture == binding
+                clearCapture()
+                if not wasCapturing then
+                    capture = binding
+                    binding.render()
+                end
+            end, color.rail)
+            return { set = binding.set, get = function() return value end, run = binding.run }
+        end
+
+        return api
+    end
+
+    gui.Parent = parent
+    layout()
+    syncAnimation()
+    return window
+end
+
+return Library
