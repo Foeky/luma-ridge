@@ -1,26 +1,22 @@
 # Luma Ridge
 
-Luma Ridge is a client-side Roblox UI library based on your original tabbed interface. It uses an animated topographic background, a mint ridge mark, rounded surfaces, and a type system built around Montserrat headings and Nunito controls. Content scrolls vertically. On narrower windows, the sidebar becomes a swipeable tab rail.
+Luma Ridge is a client-side Roblox UI library with touch-friendly controls, rebindable keyboard shortcuts, and an animated topographic background.
 
-## Install
+## Quick start
 
 ### Standalone executor script
 
-1. Download or clone this repository while signed in to GitHub. Open `LumaRidge.executor.luau`.
-2. Join an experience where you’re authorized to run scripts and wait for the Roblox client to load.
-3. Open the file in your executor or paste its complete contents, then run it. The demo appears in `PlayerGui`. Press **Right Shift** to hide or reopen it, or use the on-screen buttons.
+**[Download the standalone script](./LumaRidge.executor.luau)** while signed in to GitHub. Use **Download raw file** on the file page.
 
-The standalone script bundles the library and demo. It needs an executor that can run Luau in the Roblox client and create UI in the local player’s `PlayerGui`. It opens without a Studio ModuleScript or network request. You can run it again to replace the original executor demo.
+1. Join an experience where you’re authorized to run scripts.
+2. Open the downloaded script in your executor or paste its contents and run it.
+3. Press **Right Shift** or use the on-screen buttons to hide and reopen the demo.
 
-To customize it, edit `Demo.client.luau` and rebuild from the repository folder with PowerShell 7.
-
-```powershell
-pwsh -NoProfile -File ./Build-Executor.ps1
-```
+The script bundles the library and demo. It requires an executor that runs Luau in the Roblox client and can create UI in the local player’s `PlayerGui`. It runs without a network request. Running it again replaces the previous demo window.
 
 ### Roblox Studio
 
-**Try the packaged demo.** In Studio, right-click `StarterPlayer > StarterPlayerScripts`, choose **Insert from File**, and select `LumaRidgeDemo.rbxmx`. Press **Play**. The model contains a LocalScript with the library nested under it.
+**Try the packaged demo.** Download [LumaRidgeDemo.rbxmx](./LumaRidgeDemo.rbxmx). In Studio, right-click `StarterPlayer > StarterPlayerScripts`, choose **Insert from File**, and select the model. Press **Play**.
 
 **Install the library on its own.** Create a ModuleScript called `LumaRidge` in `ReplicatedStorage` and paste in `LumaRidge.luau`. Add a LocalScript under `StarterPlayerScripts` and paste in `Demo.client.luau` or start with this example. Run one setup to show one demo window.
 
@@ -38,6 +34,13 @@ tab:AddButton("Refresh", function()
     print("Refresh requested")
 end)
 ```
+
+## Features
+
+- Desktop sidebar with drag and resize. Narrow windows use a swipeable tab rail.
+- Buttons, toggles, sliders, text inputs, dropdowns, and rebindable shortcuts with touch actions.
+- Rounded surfaces, configurable Montserrat and Nunito typography, and a reduced-motion option.
+- Built-in icons, editable SVG sources, and an optional PNG icon atlas.
 
 ## Window API
 
@@ -137,3 +140,11 @@ Built-in names are `ridge`, `hide`, `arrow`, `down`, `check`, `resize`, `grid`, 
 3. In Device Emulator, check a small phone in portrait and landscape. Switch tabs by touch, scroll the page, drag the slider, expand the dropdown, and open the native keyboard.
 4. Hide using the header button, then tap **Open panel**. With a text field focused, check that typing the bound letter enters text. Once the field loses focus, check that the shortcut works again.
 5. Run with `reducedMotion = true` and check that the window stays fully interactive.
+
+## Rebuild the executor demo
+
+Edit [Demo.client.luau](./Demo.client.luau) to customize the demo, then rebuild the standalone script from the repository folder with PowerShell 7.
+
+```powershell
+pwsh -NoProfile -File ./Build-Executor.ps1
+```
