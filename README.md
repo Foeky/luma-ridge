@@ -4,6 +4,22 @@ Luma Ridge is a client-side Roblox UI library based on your original tabbed inte
 
 ## Install
 
+### Standalone executor script
+
+1. Download or clone this repository while signed in to GitHub. Open `LumaRidge.executor.luau`.
+2. Join an experience where you’re authorized to run scripts and wait for the Roblox client to load.
+3. Open the file in your executor or paste its complete contents, then run it. The demo appears in `PlayerGui`. Press **Right Shift** to hide or reopen it, or use the on-screen buttons.
+
+The standalone script bundles the library and demo. It needs an executor that can run Luau in the Roblox client and create UI in the local player’s `PlayerGui`. It opens without a Studio ModuleScript or network request. You can run it again to replace the original executor demo.
+
+To customize it, edit `Demo.client.luau` and rebuild from the repository folder with PowerShell 7.
+
+```powershell
+pwsh -NoProfile -File ./Build-Executor.ps1
+```
+
+### Roblox Studio
+
 **Try the packaged demo.** In Studio, right-click `StarterPlayer > StarterPlayerScripts`, choose **Insert from File**, and select `LumaRidgeDemo.rbxmx`. Press **Play**. The model contains a LocalScript with the library nested under it.
 
 **Install the library on its own.** Create a ModuleScript called `LumaRidge` in `ReplicatedStorage` and paste in `LumaRidge.luau`. Add a LocalScript under `StarterPlayerScripts` and paste in `Demo.client.luau` or start with this example. Run one setup to show one demo window.
