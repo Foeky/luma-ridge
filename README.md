@@ -4,15 +4,15 @@ Luma Ridge is a client-side Roblox UI library with touch-friendly controls, rebi
 
 ## Quick start
 
-### Standalone executor script
+### Lynx and other executors
 
 **[Download the standalone script](./LumaRidge.executor.luau)** while signed in to GitHub. Use **Download raw file** on the file page.
 
-1. Join an experience where you’re authorized to run scripts.
-2. Open the downloaded script in your executor or paste its contents and run it.
+1. Join an experience where you’re authorized to run scripts. In Lynx, check that the Roblox client is selected under **Clients**.
+2. Open `LumaRidge.executor.luau` in Lynx with **Ctrl+O**, then press **Ctrl+Enter** to run the file. [Lynx execution guide](https://getlynx.gg/docs/guides/executing)
 3. Press **Right Shift** or use the on-screen buttons to hide and reopen the demo.
 
-The script bundles the library and demo. It requires an executor that runs Luau in the Roblox client and can create UI in the local player’s `PlayerGui`. It runs without a network request. Running it again replaces the previous demo window.
+`Unknown require: game/ReplicatedStorage/LumaRidge (Luau 1012)` comes from the Studio example's import. Replace the contents of that Lynx tab with the entire standalone file, or open the standalone file in a new tab. It bundles the library and demo, creates the UI in the local player's `PlayerGui`, and runs without a network request. Running it again replaces the previous demo window.
 
 ### Roblox Studio
 
