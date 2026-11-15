@@ -7,7 +7,7 @@
 
 The LocalScript provides a small control panel and camera-relative keyboard flight. The framework's built-in **Player** tab uses the same LocalScript callbacks when it finds them. It temporarily hides the small panel while attached and restores it when unloaded.
 
-Install the current versions of both scripts for the Player tab's switches and keybinds. The tab mirrors server state and sends explicit on or off requests for Hold and Always modes.
+Install the current versions of both scripts for the Player tab's switches and inline keybinds. The tab mirrors server state and sends explicit on or off requests for Hold and Always modes.
 
 All character changes run on the server and target the requesting player's current character. Numeric requests are clamped and requests are rate limited. The LocalScript sends normalized flight direction at 15 Hz, and the server owns the flying assembly. Missing input stops flight after one second.
 

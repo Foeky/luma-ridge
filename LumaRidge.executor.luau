@@ -21,7 +21,7 @@ end
 local function start()
 local http = game:GetService("HttpService")
 local configPath = "LumaRidge-settings.json"
-local preferences = {}
+local preferences: { [string]: any } = {}
 if type(isfile) == "function" and type(readfile) == "function" then
     local ok, data = pcall(function()
         if isfile(configPath) then return http:JSONDecode(readfile(configPath)) end
@@ -265,7 +265,7 @@ local function loadLibrary()
     end
 
     local function keyCode(value)
-        return typeof(value) == "EnumItem" and value.EnumType == Enum.KeyCode and value ~= Enum.KeyCode.Unknown
+        return typeof(value) == "EnumItem" and value.EnumType == Enum.KeyCode and value.Name ~= "Unknown"
     end
 
     local function invoke(callback, ...)
@@ -303,7 +303,7 @@ local function loadLibrary()
         local pluginNames = {}
         local tabs = {}
         local bindings = {}
-        local activeTab, capture, pointer, activeFarm, farmWorker
+        local activeTab, capture, pointer
         local destroyed, visible, compact = false, true, false
         local animated = options.animateBackground ~= false
         local backgroundDuration = math.clamp(options.backgroundDuration or 12, 4, 24)
@@ -561,8 +561,79 @@ local function loadLibrary()
             end
         end
 
+        local modes = { "Hold", "Toggle", "Always" }
+        local modeTarget
+        local modeShield = make("TextButton", main, {
+            Name = "DismissKeybindMenu", BackgroundTransparency = 1, Text = "",
+            Size = UDim2.fromScale(1, 1), ZIndex = 19, Visible = false, Selectable = false,
+        })
+        local modeMenu = frame(main, {
+            Name = "KeybindMenu", Size = UDim2.fromOffset(86, 78), ZIndex = 20,
+            BackgroundColor3 = color.rail, BackgroundTransparency = 0, Visible = false,
+        })
+        corner(modeMenu, 6)
+        outline(modeMenu, color.border, 0.2)
+        padding(modeMenu, 4, 4)
+        list(modeMenu, 1)
+        local menuScale = make("UIScale", modeMenu, { Scale = 1 })
+        local modeChoices = {}
+        local function closeModeMenu()
+            modeTarget = nil
+            modeMenu.Visible = false
+            modeShield.Visible = false
+        end
+        connect(modeShield.Activated, closeModeMenu)
+        for index, mode in ipairs(modes) do
+            local choice = button(modeMenu, mode)
+            choice.Size = UDim2.new(1, 0, 0, 22)
+            choice.LayoutOrder = index
+            local label = text(choice, mode, 10, font.title)
+            label.Size = UDim2.fromScale(1, 1)
+            label.TextXAlignment = Enum.TextXAlignment.Center
+            modeChoices[mode] = interactive(choice, function()
+                local target = modeTarget
+                closeModeMenu()
+                if target then target.setMode(mode) end
+            end, color.rail)
+        end
+        local function openModeMenu(binding, anchor)
+            if modeTarget == binding then
+                closeModeMenu()
+                return
+            end
+            clearCapture()
+            modeTarget = binding
+            for name, highlight in pairs(modeChoices) do highlight(name == binding.mode) end
+            local offset = anchor.AbsolutePosition - main.AbsolutePosition
+            local edge = offset.Y + anchor.AbsoluteSize.Y + 4
+            if edge + 78 > main.AbsoluteSize.Y - 4 then edge = offset.Y - 82 end
+            modeMenu.Position = UDim2.fromOffset(
+                math.clamp(offset.X + anchor.AbsoluteSize.X - 86, 4, math.max(4, main.AbsoluteSize.X - 90)),
+                math.clamp(edge, 4, math.max(4, main.AbsoluteSize.Y - 82))
+            )
+            modeMenu.Visible = true
+            modeShield.Visible = true
+            menuScale.Scale = reducedMotion and 1 or 0.94
+            animate(menuScale, { Scale = 1 })
+        end
+
+        local keybindsHud = frame(safeArea, {
+            Name = "Keybinds", Position = UDim2.fromOffset(12, 86),
+            Size = UDim2.fromOffset(245, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Color3.fromRGB(12, 12, 16), BackgroundTransparency = 0,
+            Visible = preferences.showKeybinds == true, ZIndex = 10,
+        })
+        corner(keybindsHud, 8)
+        outline(keybindsHud, color.border, 0.35)
+        padding(keybindsHud, 10, 7)
+        list(keybindsHud, 3)
+        local hudAccent = Color3.fromRGB(255, 82, 171)
+        local hudHeader = text(keybindsHud, "Keybinds", 12, font.title, hudAccent)
+        hudHeader.Size = UDim2.new(1, 0, 0, 23)
+        local hudOrder = 0
+
         local function syncAnimation()
-            if animated and visible and not activeFarm and not reducedMotion and backgroundStyle ~= "Solid" then
+            if animated and visible and not reducedMotion and backgroundStyle ~= "Solid" then
                 backgroundTween:Play()
             else
                 backgroundTween:Pause()
@@ -570,12 +641,13 @@ local function loadLibrary()
         end
 
         function window:SetVisible(value)
-            if destroyed or activeFarm then return end
+            if destroyed then return end
             visible = value == true
             main.Visible = visible
             open.Visible = not visible
             syncAnimation()
             if not visible then
+                closeModeMenu()
                 clearCapture()
                 stopPointer()
                 local box = UserInputService:GetFocusedTextBox()
@@ -641,7 +713,6 @@ local function loadLibrary()
         local function dispose()
             if destroyed then return end
             destroyed = true
-            if activeFarm then activeFarm() end
             for _, binding in pairs(bindings) do
                 if binding.release then binding.release() end
             end
@@ -699,6 +770,7 @@ local function loadLibrary()
         local actualPosition, actualSize
         local MARGIN = 8
         local function layout()
+            closeModeMenu()
             local area = safeArea.AbsoluteSize
             if area.X <= 2 * MARGIN or area.Y <= 2 * MARGIN then return end
             local available = area - Vector2.new(2 * MARGIN, 2 * MARGIN)
@@ -811,18 +883,19 @@ local function loadLibrary()
         connect(UserInputService.WindowFocusReleased, function()
             stopPointer()
             clearCapture()
+            closeModeMenu()
             for _, binding in pairs(bindings) do
                 if binding.release then binding.release() end
             end
         end)
 
         connect(UserInputService.InputBegan, function(input, processed)
-            if activeFarm then
-                if not processed and input.KeyCode == toggleKey then activeFarm() end
-                return
-            end
             if input.UserInputType ~= Enum.UserInputType.Keyboard or UserInputService:GetFocusedTextBox() then return end
             local key = input.KeyCode
+            if modeTarget and key == Enum.KeyCode.Escape then
+                closeModeMenu()
+                return
+            end
             if capture then
                 local current = capture
                 if key == Enum.KeyCode.Escape then
@@ -852,12 +925,17 @@ local function loadLibrary()
             if activeTab == target then return end
             stopPointer()
             clearCapture()
+            closeModeMenu()
             activeTab = target
             for _, tab in ipairs(tabs) do
                 local selected = tab == target
                 tab.page.Visible = selected
                 tab.select(selected)
                 tab.label.TextColor3 = selected and color.accent or color.secondary
+                if selected and not reducedMotion then
+                    tab.stack.Position = UDim2.fromOffset(12, 14)
+                    animate(tab.stack, { Position = UDim2.fromOffset(12, 10) })
+                end
             end
         end
 
@@ -884,7 +962,7 @@ local function loadLibrary()
             })
             list(stack, 6)
             frame(stack, { Size = UDim2.fromOffset(1, 22), LayoutOrder = 2147483647 })
-            local tab = { page = page, label = tabLabel }
+            local tab = { page = page, label = tabLabel, stack = stack }
             function tab.layout()
                 tabButton.Size = docked and UDim2.fromScale(1, 1)
                     or compact and UDim2.fromOffset(154, targetHeight)
@@ -920,13 +998,13 @@ local function loadLibrary()
                 end
             end
 
-            local function action(nameText, description, reserved)
+            local function action(nameText, description, reserved, leading)
                 local row = button(nil, tostring(nameText))
                 row.Size = UDim2.new(1, 0, 0, targetHeight)
                 row.AutomaticSize = Enum.AutomaticSize.Y
                 local labels = frame(row, {
-                    Size = UDim2.new(1, -reserved - 20, 0, targetHeight),
-                    Position = UDim2.fromOffset(10, 0), AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2.new(1, -reserved - (leading or 10) - 10, 0, targetHeight),
+                    Position = UDim2.fromOffset(leading or 10, 0), AutomaticSize = Enum.AutomaticSize.Y,
                 })
                 local arrangement = list(labels, 1)
                 arrangement.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -972,8 +1050,38 @@ local function loadLibrary()
                 return row
             end
 
-            function api:AddToggle(label, description, default, callback)
+            function api:AddToggle(label, description, default, callback, keybind)
                 local value = default == true
+                if keybind then
+                    local row = action(label, description, 0, 39)
+                    local pair = frame(stack, {
+                        Name = label .. " controls", Size = UDim2.new(1, 0, 0, targetHeight),
+                        LayoutOrder = row.LayoutOrder, AutomaticSize = Enum.AutomaticSize.Y,
+                    })
+                    row.Parent = pair
+                    row.Size = UDim2.new(1, -112, 0, targetHeight)
+                    local check = frame(row, {
+                        Size = UDim2.fromOffset(17, 17), AnchorPoint = Vector2.new(0, 0.5),
+                        Position = UDim2.new(0, 12, 0.5, 0), BackgroundTransparency = 0,
+                    })
+                    corner(check, 4)
+                    outline(check, color.border, 0.25)
+                    local glyph = addIcon(check, "check", 15, color.ink)
+                    glyph.Position = UDim2.fromOffset(1, 1)
+                    local function set(nextValue, silent)
+                        if destroyed then return end
+                        value = nextValue == true
+                        glyph.Visible = value
+                        animate(check, { BackgroundColor3 = value and hudAccent or color.rail })
+                        if not silent then invoke(callback, value) end
+                    end
+                    set(value, true)
+                    interactive(row, function() set(not value) end)
+                    return {
+                        set = set, get = function() return value end,
+                        binding = api:AddKeybind(label, keybind, pair),
+                    }
+                end
                 local row = action(label, description, 53)
                 local track = frame(row, { Size = UDim2.fromOffset(36, 20), BackgroundTransparency = 0 })
                 positionRight(track, 12)
@@ -1186,36 +1294,32 @@ local function loadLibrary()
                 return { set = set, get = function() return value end }
             end
 
-            function api:AddKeybind(label, config)
+            function api:AddKeybind(label, config, host)
                 config = config or {}
                 local value
-                local panel = card(label, config.description)
-                local controls = frame(panel, { Size = UDim2.new(1, 0, 0, targetHeight), LayoutOrder = 3 })
-                local rebind = button(controls, "Rebind")
-                positionRight(rebind, 62)
-                rebind.Size = UDim2.new(1, -62, 1, 0)
-                make("UISizeConstraint", rebind, { MaxSize = Vector2.new(220, targetHeight) })
-                local readout = text(rebind, "", 14, font.title, color.accent)
-                readout.Position = UDim2.fromOffset(10, 0)
-                readout.Size = UDim2.new(1, -18, 1, 0)
-                local run = button(controls, config.setActive and "Mode" or "Run")
-                positionRight(run, 0)
-                run.Size = UDim2.fromOffset(56, targetHeight)
-                local runLabel = text(run, config.setActive and "Mode" or "Run", 15, font.title)
-                runLabel.Size = UDim2.fromScale(1, 1)
-                runLabel.TextXAlignment = Enum.TextXAlignment.Center
-                local binding = { label = readout, global = config.setActive ~= nil }
-                local mode, held = "Toggle", false
-                local modes = { "Hold", "Toggle", "Always" }
-                local menu = frame(panel, {
-                    Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-                    LayoutOrder = 4, Visible = false,
+                local controls = host or frame(card(label, config.description), {
+                    Size = UDim2.new(1, 0, 0, targetHeight), LayoutOrder = 3,
                 })
-                local modeLayout = list(menu, 4)
-                modeLayout.FillDirection = Enum.FillDirection.Horizontal
-                local function modeChanged()
-                    if config.onModeChanged then config.onModeChanged(mode) end
-                end
+                local rebind = button(controls, "Rebind")
+                positionRight(rebind, config.setActive and 0 or 62)
+                rebind.Size = UDim2.fromOffset(host and 104 or 140, UserInputService.TouchEnabled and 44 or 30)
+                local readout = text(rebind, "", 11, font.title, color.accent)
+                readout.Position = UDim2.fromOffset(5, 0)
+                readout.Size = UDim2.new(1, -10, 1, 0)
+                readout.TextXAlignment = Enum.TextXAlignment.Center
+                local binding = { label = readout, global = config.setActive ~= nil, mode = "Toggle" }
+                local held = false
+                hudOrder += 1
+                local hudRow = frame(keybindsHud, { Size = UDim2.new(1, 0, 0, 20), LayoutOrder = hudOrder })
+                local hudMode = text(hudRow, "", 10, font.title, hudAccent)
+                hudMode.Size = UDim2.fromOffset(55, 20)
+                local hudName = text(hudRow, label, 10, font.title)
+                hudName.Position = UDim2.fromOffset(57, 0)
+                hudName.Size = UDim2.new(1, -112, 1, 0)
+                local hudKey = text(hudRow, "", 10, font.title, hudAccent)
+                positionRight(hudKey, 0)
+                hudKey.Size = UDim2.fromOffset(52, 20)
+                hudKey.TextXAlignment = Enum.TextXAlignment.Right
                 function binding.release()
                     if held then
                         held = false
@@ -1226,8 +1330,8 @@ local function loadLibrary()
                 function binding.run()
                     if destroyed then return end
                     if config.setActive then
-                        if mode == "Always" then return end
-                        if mode == "Hold" then
+                        if binding.mode == "Always" then return end
+                        if binding.mode == "Hold" then
                             if not held then
                                 held = true
                                 config.setActive(true)
@@ -1241,11 +1345,13 @@ local function loadLibrary()
                 end
 
                 function binding.render()
+                    local name = value and value.Name or "Unbound"
+                    hudMode.Text = config.setActive and binding.mode or "Press"
+                    hudKey.Text = value and value.Name or "None"
                     if capture == binding then
                         readout.Text = "Press a key…"
                     else
-                        local name = value and value.Name or "Unbound"
-                        readout.Text = config.setActive and (name .. " · " .. mode) or name
+                        readout.Text = name
                     end
                 end
 
@@ -1269,9 +1375,12 @@ local function loadLibrary()
                 end
 
                 local ok, errorMessage = binding.set(config.default, true)
-                if not ok then readout.Text = errorMessage end
+                if not ok then
+                    binding.render()
+                    readout.Text = errorMessage
+                end
                 interactive(rebind, function()
-                    menu.Visible = false
+                    if modeTarget == binding then return end
                     local wasCapturing = capture == binding
                     clearCapture()
                     if not wasCapturing then
@@ -1280,173 +1389,33 @@ local function loadLibrary()
                     end
                 end, color.rail)
                 if config.setActive then
-                    local function showModes()
-                        clearCapture()
-                        menu.Visible = not menu.Visible
-                    end
-                    connect(rebind.MouseButton2Click, showModes)
-                    interactive(run, showModes, color.rail)
-                    local function selectMode(nextMode, silent)
+                    function binding.setMode(nextMode, silent)
                         if not table.find(modes, nextMode) then return end
                         binding.release()
-                        if mode == "Always" and nextMode ~= "Always" then config.setActive(false) end
-                        mode = nextMode
-                        if mode == "Always" and not silent then config.setActive(true) end
+                        if binding.mode == "Always" and nextMode ~= "Always" then config.setActive(false) end
+                        binding.mode = nextMode
+                        if nextMode == "Always" and not silent then config.setActive(true) end
                         binding.render()
-                        menu.Visible = false
-                        if not silent then modeChanged() end
+                        if not silent and config.onModeChanged then config.onModeChanged(nextMode) end
                     end
-                    for _, option in ipairs(modes) do
-                        local choice = button(menu, option)
-                        choice.Size = UDim2.new(1 / 3, -3, 0, targetHeight)
-                        local title = text(choice, option, 14, font.title)
-                        title.Size = UDim2.fromScale(1, 1)
-                        title.TextXAlignment = Enum.TextXAlignment.Center
-                        interactive(choice, function() selectMode(option) end, color.rail)
-                    end
-                    selectMode(config.mode or "Toggle", true)
+                    connect(rebind.MouseButton2Click, function() openModeMenu(binding, rebind) end)
+                    connect(rebind.TouchLongPress, function(_, state)
+                        if state == Enum.UserInputState.Begin then openModeMenu(binding, rebind) end
+                    end)
+                    binding.setMode(config.mode or "Toggle", true)
                 else
+                    local run = button(controls, "Run")
+                    positionRight(run, 0)
+                    run.Size = UDim2.fromOffset(56, UserInputService.TouchEnabled and 44 or 30)
+                    local runLabel = text(run, "Run", 11, font.title)
+                    runLabel.Size = UDim2.fromScale(1, 1)
+                    runLabel.TextXAlignment = Enum.TextXAlignment.Center
                     interactive(run, binding.run, color.rail)
                 end
                 return {
                     set = binding.set, get = function() return value end,
-                    run = binding.run, getMode = function() return mode end,
+                    run = binding.run, getMode = function() return binding.mode end,
                 }
-            end
-
-            function api:AddFarm(label, config)
-                assert(type(config) == "table" and type(config.step) == "function", "Farm needs a step callback")
-                assert(config.variables == nil or type(config.variables) == "table", "Farm variables must be a table")
-                assert(config.stats == nil or type(config.stats) == "table", "Farm stats must be a list")
-                local interval = config.interval or 1
-                assert(type(interval) == "number" and interval >= 0.1 and interval <= 60, "Farm interval must be 0.1–60 seconds")
-                local shown, statLabels, statList = {}, {}, {}
-                for _, stat in ipairs(config.stats or {}) do
-                    assert(type(stat) == "table" and type(stat.key) == "string" and type(stat.label) == "string",
-                        "Each stat needs a string key and label")
-                    assert(shown[stat.key] == nil, "Duplicate farm stat: " .. stat.key)
-                    shown[stat.key] = stat.visible ~= false
-                    table.insert(statList, { key = stat.key, label = stat.label })
-                end
-
-                local function startFarm()
-                    if destroyed or activeFarm or farmWorker then return end
-                    local state = {
-                        running = true, variables = table.clone(config.variables or {}),
-                        stats = {}, elapsed = 0,
-                    }
-                    local runService = game:GetService("RunService")
-                    local overlay = make("ScreenGui", nil, {
-                        Name = "LumaRidgeFarmDashboard", ResetOnSpawn = false,
-                        DisplayOrder = gui.DisplayOrder + 10, ScreenInsets = Enum.ScreenInsets.None,
-                        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-                    })
-                    local black = frame(overlay, {
-                        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0,
-                        BackgroundColor3 = Color3.new(0, 0, 0), Active = true,
-                    })
-                    local dashboard = scroll(black, "Dashboard", Enum.AutomaticSize.Y, color.border)
-                    dashboard.AnchorPoint = Vector2.new(0.5, 0.5)
-                    dashboard.Position = UDim2.fromScale(0.5, 0.5)
-                    dashboard.Size = UDim2.fromScale(0.9, 0.78)
-                    make("UISizeConstraint", dashboard, { MaxSize = Vector2.new(560, 640) })
-                    padding(dashboard, 6, 5)
-                    list(dashboard, 8)
-                    local title = text(dashboard, label .. " · WIP", 21, font.display)
-                    title.Size = UDim2.new(1, -10, 0, 36)
-                    title.LayoutOrder = 1
-                    local status = text(dashboard, "Starting…", 14, font.body, color.secondary, true)
-                    status.Size = UDim2.new(1, -10, 0, 0)
-                    status.AutomaticSize = Enum.AutomaticSize.Y
-                    status.LayoutOrder = 4
-                    local stats = frame(dashboard, { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 5 })
-                    list(stats, 5)
-                    local choices = frame(dashboard, {
-                        Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 6, Visible = false,
-                    })
-                    list(choices, 5)
-                    local function dashboardButton(container, caption, order)
-                        local control = button(container, caption)
-                        control.Size = UDim2.new(1, container == dashboard and -10 or 0, 0, targetHeight)
-                        control.LayoutOrder = order
-                        local labelObject = text(control, caption, 14, font.title)
-                        labelObject.Position = UDim2.fromOffset(12, 0)
-                        labelObject.Size = UDim2.new(1, -24, 1, 0)
-                        return control, labelObject
-                    end
-                    local renderingPaused = false
-                    local function stop()
-                        if activeFarm ~= stop then return end
-                        state.running = false
-                        if renderingPaused then
-                            local ok, reason = pcall(function() runService:Set3dRenderingEnabled(true) end)
-                            if not ok then report("Could not restore 3D rendering: " .. tostring(reason), true) end
-                        end
-                        activeFarm = nil
-                        overlay:Destroy()
-                        table.clear(statLabels)
-                        if not destroyed then
-                            gui.Enabled = true
-                            syncAnimation()
-                        end
-                    end
-                    local stopButton = dashboardButton(dashboard, "Stop and return", 2)
-                    local editButton = dashboardButton(dashboard, "Customize stats", 3)
-                    stopButton.Activated:Connect(stop)
-                    editButton.Activated:Connect(function() choices.Visible = not choices.Visible end)
-                    for index, stat in ipairs(statList) do
-                        local statLabel = text(stats, "", 16, font.title, color.text, true)
-                        statLabel.Size = UDim2.new(1, 0, 0, 0)
-                        statLabel.AutomaticSize = Enum.AutomaticSize.Y
-                        statLabel.LayoutOrder = index
-                        statLabel.Visible = shown[stat.key]
-                        statLabels[stat.key] = statLabel
-                        local choice, caption = dashboardButton(choices, stat.label, index)
-                        local function refreshVisibility()
-                            caption.Text = stat.label .. (shown[stat.key] and " · Shown" or " · Hidden")
-                            statLabel.Visible = shown[stat.key]
-                        end
-                        refreshVisibility()
-                        choice.Activated:Connect(function()
-                            shown[stat.key] = not shown[stat.key]
-                            refreshVisibility()
-                        end)
-                    end
-
-                    activeFarm, farmWorker = stop, true
-                    environment.LumaRidgeFarm = state
-                    clearCapture()
-                    stopPointer()
-                    for _, binding in pairs(bindings) do
-                        if binding.release then binding.release() end
-                    end
-                    overlay.Parent = parent
-                    gui.Enabled = false
-                    syncAnimation()
-                    -- shortcut: Runtime has no render-state getter. Restore rendering after a successful pause.
-                    renderingPaused = pcall(function() runService:Set3dRenderingEnabled(false) end)
-                    local renderStatus = renderingPaused and "3D paused" or "3D pause unavailable"
-                    local began = os.clock()
-                    task.spawn(function()
-                        local ok, reason = xpcall(function()
-                            while state.running do
-                                state.elapsed = math.floor(os.clock() - began)
-                                local keepGoing = config.step(state)
-                                if not state.running or keepGoing == false then break end
-                                status.Text = string.format("%s  ·  %ds elapsed", renderStatus, state.elapsed)
-                                for _, stat in ipairs(statList) do
-                                    local value = state.stats[stat.key]
-                                    statLabels[stat.key].Text = stat.label .. "  ·  " .. (value == nil and "—" or tostring(value))
-                                end
-                                task.wait(interval)
-                            end
-                        end, debug.traceback)
-                        farmWorker = nil
-                        if not ok then report("Farm stopped: " .. tostring(reason), true) end
-                        stop()
-                    end)
-                end
-                return self:AddButton(label, config.description, startFarm, "play")
             end
 
             return api
@@ -1461,6 +1430,10 @@ local function loadLibrary()
             appearance = self:AddTab("Settings", "settings", true)
             layout()
             appearance:AddSection("Interface")
+            appearance:AddToggle("Keybinds", "Show the shortcut list on screen.", keybindsHud.Visible, function(enabled)
+                preferences.showKeybinds = enabled
+                keybindsHud.Visible = enabled
+            end)
             local sizes = { Small = 1, Default = 1.25, Large = 1.4 }
             local function applyTextSize(choice)
                 preferences.textSize = choice
@@ -1548,7 +1521,6 @@ local function loadLibrary()
 end
 
 local LumaRidge = loadLibrary()
-local playerGui = players.LocalPlayer:WaitForChild("PlayerGui")
 local previousDemo = playerGui:FindFirstChild("LumaRidgeExecutorDemo")
 if previousDemo and previousDemo:IsA("ScreenGui") then
     previousDemo:Destroy()
@@ -1564,7 +1536,7 @@ environment.LumaRidge = window
 
 local overview = window:AddTab("Overview", "grid")
 overview:AddSection("Trail survey")
-overview:AddLabel("Record waypoints, configure your map, or try the survey dashboard. These examples update local counters.")
+overview:AddLabel("Record waypoints and configure your map. The survey counter updates as you record.")
 local waypoints, recording = 0, true
 local status = overview:AddLabel("Waypoints recorded  ·  0")
 local function recordWaypoint()
@@ -1582,7 +1554,7 @@ end)
 overview:AddButton("Record waypoint", "Add one waypoint to the survey.", recordWaypoint, "plus")
 overview:AddKeybind("Record waypoint shortcut", { default = Enum.KeyCode.F, callback = recordWaypoint })
 overview:AddKeybind("Recording mode shortcut", {
-    description = "Click to bind. Right-click or select Mode for Hold, Toggle, and Always.",
+    description = "Click to bind. Right-click or long-press to pick a mode.",
     setActive = function(enabled) record.set(enabled) end,
     toggleActive = function() record.set(not record.get()) end,
 })
@@ -1617,28 +1589,6 @@ local profileControl = settings:AddInput("Profile name", {
     callback = function(value)
         profile = value ~= "" and value or "Unnamed"
         showSelection()
-    end,
-})
-
-local farmTab = window:AddTab("Farm · WIP", "play")
-farmTab:AddSection("Survey dashboard")
-farmTab:AddLabel("Run a simulated survey in fullscreen. Use Customize stats to show or hide individual counters.")
-farmTab:AddFarm("Start survey", {
-    description = "Collect example waypoints and samples once per second.",
-    interval = 1,
-    variables = { route = "North Ridge", samplesPerWaypoint = 3 },
-    stats = {
-        { key = "route", label = "Route" },
-        { key = "waypoints", label = "Waypoints" },
-        { key = "samples", label = "Samples" },
-        { key = "rate", label = "Samples per waypoint", visible = false },
-    },
-    step = function(session)
-        local count = (session.stats.waypoints or 0) + 1
-        session.stats.route = session.variables.route
-        session.stats.waypoints = count
-        session.stats.samples = count * session.variables.samplesPerWaypoint
-        session.stats.rate = session.variables.samplesPerWaypoint
     end,
 })
 
@@ -1687,35 +1637,11 @@ window:Use({
             return ok and accepted
         end
         tab:AddSection("Movement")
-        local walk
-        walk = tab:AddSlider("Walk speed", { min = 0, max = 64, default = player:GetAttribute("LRWalkSpeed") or 16,
-            callback = function(value)
-                if not action("setWalkSpeed", value) then walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end
-            end })
-        observe("LRWalkSpeed", function() walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end)
-        local jump
-        jump = tab:AddInput("Jump power / height", {
-            description = "Power uses 0–100. Height uses 0–25. The server selects the current jump mode.",
-            placeholder = "Enter a number",
-            default = player:GetAttribute("LRJump"),
-            callback = function(value)
-                local number = tonumber(value)
-                if not number or not action("setJump", number) then jump.set(player:GetAttribute("LRJump"), true) end
-            end,
-        })
-        observe("LRJump", function() jump.set(player:GetAttribute("LRJump"), true) end)
-        local flySpeed
-        flySpeed = tab:AddSlider("Fly speed", { min = 1, max = 100, default = player:GetAttribute("LRFlySpeed") or 40,
-            callback = function(value)
-                if not action("setFlySpeed", value) then flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end
-            end })
-        observe("LRFlySpeed", function() flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end)
-        tab:AddSection("Abilities")
         if type(preferences.bindings) ~= "table" then preferences.bindings = {} end
         local features = {
             { name = "Fly", description = "WASD, Space and Ctrl" },
-            { name = "Noclip", description = "Pass through surfaces" },
-            { name = "Invisible", description = "Hide your character from other players" },
+            { name = "Noclip" },
+            { name = "Invisible" },
         }
         for _, feature in ipairs(features) do
             local name = feature.name
@@ -1735,16 +1661,45 @@ window:Use({
                 if (not enabled and feature.binding.getMode() == "Always") or not setActive(enabled) then
                     toggle.set(active(), true)
                 end
-            end)
-            observe(attribute, function() toggle.set(active(), true) end)
-            feature.setActive = setActive
-            feature.binding = tab:AddKeybind(name .. " keybind", {
+            end, {
                 default = defaultKey, mode = saved.mode, setActive = setActive,
                 toggleActive = function() action("toggle" .. name) end,
                 onChanged = function(key) saved.key = key and key.Name or nil end,
                 onModeChanged = function(mode) saved.mode = mode end,
             })
+            observe(attribute, function() toggle.set(active(), true) end)
+            feature.setActive = setActive
+            feature.binding = toggle.binding
         end
+        tab:AddSection("Movement settings")
+        local walk
+        walk = tab:AddSlider("Walk speed", { min = 0, max = 64, default = player:GetAttribute("LRWalkSpeed") or 16,
+            callback = function(value)
+                if not action("setWalkSpeed", value) then walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end
+            end })
+        observe("LRWalkSpeed", function() walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end)
+        local jump
+        jump = tab:AddInput("Jump", {
+            description = "Enter a value for the current jump mode.",
+            default = player:GetAttribute("LRJump"),
+            callback = function(value)
+                local number = tonumber(value)
+                if not number or not action("setJump", number) then jump.set(player:GetAttribute("LRJump"), true) end
+            end,
+        })
+        observe("LRJump", function() jump.set(player:GetAttribute("LRJump"), true) end)
+        local jumpMode = tab:AddLabel("")
+        local function refreshJumpMode()
+            jumpMode.Text = player:GetAttribute("LRUseJumpPower") == false and "Jump height · 0–25" or "Jump power · 0–100"
+        end
+        observe("LRUseJumpPower", refreshJumpMode)
+        refreshJumpMode()
+        local flySpeed
+        flySpeed = tab:AddSlider("Fly speed", { min = 1, max = 100, default = player:GetAttribute("LRFlySpeed") or 40,
+            callback = function(value)
+                if not action("setFlySpeed", value) then flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end
+            end })
+        observe("LRFlySpeed", function() flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end)
         if player:GetAttribute("LRGravityAllowed") then
             tab:AddInput("Experience gravity", {
                 description = "Changes gravity for everyone. Server range 0–300.",
@@ -1763,12 +1718,15 @@ window:Use({
             end
             if not bridge then
                 status.Text = "Install the Player server Script and LocalScript in your experience to enable these controls."
+                status.Visible = true
             elseif not player:GetAttribute("LRPlayerAllowed") then
                 status.Text = "Your user ID is not enabled for Player controls."
+                status.Visible = true
             elseif not player:GetAttribute("LRCharacterReady") then
                 status.Text = "Waiting for your character."
+                status.Visible = true
             else
-                status.Text = "Click a keybind to set a key. Right click it to choose a mode."
+                status.Visible = false
                 for _, feature in ipairs(features) do
                     if feature.binding.getMode() == "Always" then feature.setActive(true) end
                 end
@@ -1778,6 +1736,13 @@ window:Use({
         observe("LRPlayerAllowed", refresh)
         table.insert(connections, playerGui.ChildAdded:Connect(function(child)
             if child.Name == "LumaRidgePlayerActions" or child.Name == "LumaRidgePlayerPanel" then refresh() end
+        end))
+        table.insert(connections, playerGui.ChildRemoved:Connect(function(child)
+            if child.Name == "LumaRidgePlayerActions" then
+                if panel and panel.Parent then panel.Enabled = wasEnabled end
+                panel = nil
+                refresh()
+            end
         end))
         refresh()
         return function()
