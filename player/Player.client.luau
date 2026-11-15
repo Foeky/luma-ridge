@@ -31,6 +31,7 @@ local api = {}
 local allowed = {
     setWalkSpeed = true, setJump = true, toggleFly = true, setFlySpeed = true,
     toggleNoclip = true, toggleInvisible = true, setGravity = true,
+    setFly = true, setNoclip = true, setInvisible = true,
 }
 local function send(action, value)
     if player:GetAttribute("LRPlayerAllowed") ~= true then return false, "Player controls are not enabled for your user ID" end
@@ -44,6 +45,9 @@ function api.setFlySpeed(value) return send("setFlySpeed", value) end
 function api.toggleNoclip() return send("toggleNoclip") end
 function api.toggleInvisible() return send("toggleInvisible") end
 function api.setGravity(value) return send("setGravity", value) end
+function api.setFly(value) return send("setFly", value) end
+function api.setNoclip(value) return send("setNoclip", value) end
+function api.setInvisible(value) return send("setInvisible", value) end
 
 local bridge = Instance.new("BindableFunction")
 bridge.Name = "LumaRidgePlayerActions"

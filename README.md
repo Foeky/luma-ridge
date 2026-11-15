@@ -1,69 +1,86 @@
 # Luma Ridge
 
-A Roblox executor UI framework with a black theme, Open Sans, tabs, plugins, and an interactive playground. The default window is 880 × 610 and fits smaller screens automatically.
-
-## Run in Lynx
-
-Download `LumaRidge.executor.luau`, open it in Lynx, select your joined Roblox client and press **Ctrl+Enter**.
-
-For a local workspace copy, run this loader. It prints before reading or compiling the framework so loader failures appear in Output.
+Save [LumaRidge.executor.luau](./LumaRidge.executor.luau) in your executor workspace, then run:
 
 ```lua
-print("[Luma Ridge loader] Starting")
-local ok, err = pcall(function()
-    local source = readfile("LumaRidge.executor.luau")
-    local run, reason = loadstring(source, "@LumaRidge")
-    assert(run, reason)
-    run()
+assert(loadstring(readfile("LumaRidge.executor.luau"), "@LumaRidge"))()
+```
+
+## Add controls
+
+After launch, use `getgenv().LumaRidge` to add a tab. Insert the same code after the window is created if you maintain your own copy of the script.
+
+```lua
+local ui = getgenv().LumaRidge
+local tab = ui:AddTab("Survey", "grid")
+tab:AddSection("Waypoints")
+local status = tab:AddLabel("No waypoints")
+local count, recording = 0, true
+
+local function record()
+    if not recording then return end
+    count += 1
+    status.Text = "Waypoints: " .. count
+end
+
+tab:AddButton("Record", "Add one waypoint", record, "plus")
+local enabled = tab:AddToggle("Recording", "Allow new waypoints", true, function(value)
+    recording = value
 end)
-if not ok then warn("[Luma Ridge loader] " .. tostring(err)) end
+tab:AddSlider("Map detail", {
+    min = 0, max = 100, step = 5, default = 60,
+    callback = function(value) print("Detail:", value) end,
+})
+tab:AddInput("Route name", {
+    placeholder = "North Ridge",
+    callback = function(value) print(value) end,
+})
+tab:AddDropdown("Map style", {
+    options = { "Terrain", "Street" }, default = "Terrain",
+    callback = function(value) print(value) end,
+})
+tab:AddKeybind("Record waypoint", { default = Enum.KeyCode.K, callback = record })
+tab:AddKeybind("Recording mode", {
+    setActive = function(value) enabled.set(value) end,
+    toggleActive = function() enabled.set(not enabled.get()) end,
+})
 ```
 
-When the repository is public, replace the `readfile` line with this.
+- `AddTab(name, icon)` creates a tab. `tab:Select()` opens it.
+- Icons include `ridge`, `hide`, `arrow`, `down`, `check`, `resize`, `grid`, `sliders`, `keyboard`, `play`, `settings`, `plus`, `close`, `info`, `folder`, `search`, and `exit`. You can also pass a Roblox image content ID.
+- Toggles, sliders, inputs, and dropdowns return handles with `get()` and `set(value, silent?)`. Use `silent = true` to update a control without calling its callback.
+- A keybind accepts `default`, `callback`, and optional `onChanged`. For a stateful action, supply both `setActive(boolean)` and `toggleActive()`. Click to bind, press **Esc** to cancel or **Backspace** to clear. Right-click or use **Mode** to choose **Hold**, **Toggle**, or **Always**. Supply `onModeChanged` to capture changes.
+- `ui:Use({ name = "Plugin name", setup = function(window, log) ... end })` registers a plugin. Return a cleanup function from `setup` to release your resources at unload.
+- **Settings → Save config** persists appearance, Debug, and Player keybinds. The built-in **Player** tab requires the [companion scripts](./player/README.md) installed in your experience.
+
+## Add a one-click farm dashboard (WIP)
+
+The button runs your callback at the configured interval. Use callbacks for your own experience or local simulations. This example generates sample counts.
 
 ```lua
-local source = game:HttpGet("https://raw.githubusercontent.com/Foeky/luma-ridge/main/LumaRidge.executor.luau")
-```
+local env = getgenv()
+env.MySurveyVariables = { route = "North Ridge", samplesPerWaypoint = 3 }
 
-Startup displays progress and downloads `assets/Icons.png` into the executor workspace as `LumaRidge-icons-v2.png`. Later runs reuse the cache. A failed or inaccessible download uses built-in icons and records the reason. For a private repository, download the PNG manually and save it under that cache filename. SVG sources are included for editing.
-
-## Controls
-
-- **Right Shift** or the small **X** hides the panel. The centered ridge icon reopens it.
-- **Controls** contains the playground inputs. **Tests** runs a control smoke test.
-- **Settings** stays at the bottom-left. Choose **Contours**, **Grid**, **Dots**, **Gradient**, or **Solid**, and adjust text size, animation speed, and pattern visibility. Enable **Debug** for the on-screen diagnostic log and console messages.
-- **Unload** removes the panel and its event connections and calls plugin cleanup functions.
-
-The built-in **Player** tab connects to the optional server-authoritative controls installed in your own experience. Follow the [Player setup instructions](./player/README.md). These scripts use standard Roblox APIs.
-
-## Plugins
-
-Set configuration before running the framework. Plugins receive the window and a log function. Return a cleanup function for any connections or objects your plugin creates. Each plugin name can be loaded once per window. A failed plugin is reported while other plugins continue.
-
-```lua
-getgenv().LumaRidgeConfig = {
-    debug = true,
-    plugins = {
-        {
-            name = "Example",
-            setup = function(window, log)
-                local tab = window:AddTab("Example", "plus")
-                tab:AddButton("Hello", "Test a plugin callback", function()
-                    log("Hello from Example")
-                end)
-                return function() print("Example unloaded") end
-            end,
-        },
+env.LumaRidge:AddTab("Survey run", "play"):AddFarm("Start survey", {
+    description = "Count samples on the selected route",
+    interval = 1,
+    variables = env.MySurveyVariables,
+    stats = {
+        { key = "route", label = "Route" },
+        { key = "waypoints", label = "Waypoints" },
+        { key = "samples", label = "Samples" },
+        { key = "rate", label = "Samples per waypoint", visible = false },
     },
-}
+    step = function(session)
+        local waypoints = (session.stats.waypoints or 0) + 1
+        session.stats.route = session.variables.route
+        session.stats.waypoints = waypoints
+        session.stats.samples = waypoints * session.variables.samplesPerWaypoint
+        session.stats.rate = session.variables.samplesPerWaypoint
+    end,
+})
 ```
 
-After startup, `getgenv().LumaRidge:Use(plugin)` loads another plugin. The configuration can optionally supply `assetUrl` for a reachable PNG atlas. The default framework opens freely.
-
-## Build your UI
-
-Edit the `local window = LumaRidge.new({...})` block near the bottom of the script. Use `window:AddTab(name, icon)` and `window:AddAppearanceTab()`.
-
-Tabs support `AddSection`, `AddLabel`, `AddButton`, `AddToggle`, `AddSlider`, `AddInput`, `AddDropdown`, and `AddKeybind`. Examples in the playground show their arguments. Control handles use `get()` and `set(value, silent?)`.
-
-Icons include `ridge`, `hide`, `arrow`, `down`, `check`, `resize`, `grid`, `sliders`, `keyboard`, `play`, `settings`, `plus`, `close`, `info`, `folder`, `search`, and `exit`.
+- `variables` is shallow-copied each time you start. `getgenv().LumaRidgeFarm` exposes the latest session with `running`, `elapsed` in whole seconds, `variables`, and `stats`. Use the matching `stats.key` to publish each value.
+- `step(session)` runs immediately, then waits `interval` seconds between calls (0.1–60, default 1). Return `false` to finish. If your callback yields, check `session.running` before continuing work. Stopping prevents further calls once the current callback returns.
+- The dashboard covers the viewport in black and attempts to pause 3D rendering. It shows whether pausing succeeded. Use **Customize stats** to show or hide individual values. **Stop and return**, **Right Shift**, or unloading closes the dashboard and restores rendering if Luma Ridge paused it.

@@ -19,6 +19,27 @@ local function report(message, isError)
 end
 
 local function start()
+local http = game:GetService("HttpService")
+local configPath = "LumaRidge-settings.json"
+local preferences = {}
+if type(isfile) == "function" and type(readfile) == "function" then
+    local ok, data = pcall(function()
+        if isfile(configPath) then return http:JSONDecode(readfile(configPath)) end
+    end)
+    if ok and type(data) == "table" then preferences = data end
+    if not ok then report("Could not read saved settings: " .. tostring(data), true) end
+end
+if config.debug == nil and type(preferences.debug) == "boolean" then
+    debugEnabled = preferences.debug
+end
+local function savePreferences()
+    local ok, reason = pcall(function()
+        assert(type(writefile) == "function", "Executor file writes are unavailable")
+        writefile(configPath, http:JSONEncode(preferences))
+    end)
+    report(ok and ("Saved " .. configPath) or tostring(reason), not ok)
+    return ok
+end
 
 local players = game:GetService("Players")
 local deadline = os.clock() + 20
@@ -50,7 +71,7 @@ task.wait()
 local assetOk, assetError = pcall(function()
     assert(type(isfile) == "function" and type(readfile) == "function"
         and type(writefile) == "function" and type(getcustomasset) == "function", "Asset file APIs unavailable")
-    local path = "LumaRidge-icons-v2.png"
+    local path = "LumaRidge-icons-v3.png"
     local valid = isfile(path) and readfile(path):sub(1, 8) == "\137PNG\r\n\26\n"
     if not valid then
         report("1/3 Downloading icon atlas…")
@@ -103,7 +124,8 @@ local function loadLibrary()
     }
 
     local ICONS = {
-        { "ridge", { { 3, 18, 9, 7, 13, 13, 16, 8, 21, 18 }, { 6, 21, 18, 21 } } },
+        { "ridge", { { 12, 2.5, 21, 7.5, 21, 16.5, 12, 21.5, 3, 16.5, 3, 7.5, 12, 2.5 },
+            { 6.5, 14.5, 10.5, 8.5, 13, 12, 15, 9.5, 17.5, 13.5 }, { 10, 16.5, 14, 16.5 } } },
         { "hide", { { 6, 12, 18, 12 } } },
         { "arrow", { { 9, 6, 15, 12, 9, 18 } } },
         { "down", { { 6, 9, 12, 15, 18, 9 } } },
@@ -263,9 +285,10 @@ local function loadLibrary()
         local player = Players.LocalPlayer
         assert(player, "Run Luma Ridge in a Roblox client")
         local parent = options.parent or player:WaitForChild("PlayerGui")
-        local targetHeight = UserInputService.TouchEnabled and 46 or 40
-        local iconButtonSize = UserInputService.TouchEnabled and 44 or 28
-        local headerHeight = targetHeight + 12
+        local targetHeight = UserInputService.TouchEnabled and 52 or 46
+        local iconButtonSize = UserInputService.TouchEnabled and 44 or 36
+        local headerHeight = targetHeight + 16
+        local railWidth = 208
         local desiredSize = options.size or Vector2.new(880, 610)
         local minSize = options.minSize or Vector2.new(580, 375)
         local maxSize = options.maxSize or Vector2.new(1100, 820)
@@ -280,7 +303,7 @@ local function loadLibrary()
         local pluginNames = {}
         local tabs = {}
         local bindings = {}
-        local activeTab, capture, pointer
+        local activeTab, capture, pointer, activeFarm, farmWorker
         local destroyed, visible, compact = false, true, false
         local animated = options.animateBackground ~= false
         local backgroundDuration = math.clamp(options.backgroundDuration or 12, 4, 24)
@@ -288,7 +311,7 @@ local function loadLibrary()
         local transition = TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         local tweens = setmetatable({}, { __mode = "k" })
         local textSizes = setmetatable({}, { __mode = "k" })
-        local textScale = 1.1
+        local textScale = 1.25
 
         local function sizeText(object, size)
             textSizes[object] = size
@@ -418,7 +441,7 @@ local function loadLibrary()
         resetBackgroundTween()
 
         local contours = frame(backdrop, {
-            AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+            AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(550, 460),
         })
         local contourScale = make("UIScale", contours, { Scale = 1 })
@@ -438,20 +461,27 @@ local function loadLibrary()
             end
         end
 
-        local grid = frame(contours, { Name = "Grid", Size = UDim2.fromScale(1, 1), Visible = false })
-        local dots = frame(contours, { Name = "Dots", Size = UDim2.fromScale(1, 1), Visible = false })
+        local grid = frame(backdrop, { Name = "Grid", Size = UDim2.fromScale(1, 1), Visible = false })
+        local dots = frame(backdrop, { Name = "Dots", Size = UDim2.fromScale(1, 1), Visible = false })
+        local patterns = { contours, grid, dots }
         for x = 10, 540, 28 do
-            line(grid, x, 6, x, 454, 1, color.accent, contourAlpha)
+            frame(grid, {
+                Position = UDim2.fromScale(x / 550, 0.02), Size = UDim2.new(0, 1, 0.96, 0),
+                BackgroundColor3 = color.accent, BackgroundTransparency = contourAlpha,
+            })
             for y = 6, 454, 28 do
                 local dot = frame(dots, {
-                    Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(2, 2),
+                    Position = UDim2.fromScale(x / 550, y / 460), Size = UDim2.fromOffset(2, 2),
                     BackgroundColor3 = color.accent, BackgroundTransparency = contourAlpha,
                 })
                 corner(dot, 1)
             end
         end
         for y = 6, 454, 28 do
-            line(grid, 10, y, 540, y, 1, color.accent, contourAlpha)
+            frame(grid, {
+                Position = UDim2.fromScale(0.02, y / 460), Size = UDim2.new(0.96, 0, 0, 1),
+                BackgroundColor3 = color.accent, BackgroundTransparency = contourAlpha,
+            })
         end
 
         local header = frame(main, {
@@ -459,21 +489,31 @@ local function loadLibrary()
             BackgroundColor3 = color.rail, BackgroundTransparency = 0, ZIndex = 2,
         })
         corner(header, 7)
-        local mark = addIcon(header, options.icon or "ridge", 23, color.accent)
-        mark.AnchorPoint = Vector2.new(0, 0.5)
-        mark.Position = UDim2.new(0, 11, 0.5, 0)
-        local title = text(header, options.title or "Luma Ridge", 16, font.display)
-        title.Position = UDim2.new(0, 43, 0.5, -18)
-        title.Size = UDim2.new(1, -targetHeight - 58, 0, 20)
-        local subtitle = text(header, options.subtitle or "Interface library", 12, font.body, color.secondary)
-        subtitle.Position = UDim2.new(0, 43, 0.5, 2)
-        subtitle.Size = UDim2.new(1, -targetHeight - 58, 0, 16)
+        local logo = frame(header, {
+            AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+            Size = UDim2.fromOffset(40, 40), BackgroundColor3 = color.surface, BackgroundTransparency = 0,
+        })
+        corner(logo, 9)
+        outline(logo, color.border, 0.4)
+        local mark = addIcon(logo, options.icon or "ridge", 30, color.text)
+        mark.AnchorPoint = Vector2.new(0.5, 0.5)
+        mark.Position = UDim2.fromScale(0.5, 0.5)
+        local title = text(header, options.title or "Luma Ridge", 18, font.display)
+        local hasSubtitle = type(options.subtitle) == "string" and options.subtitle ~= ""
+        title.AnchorPoint = Vector2.new(0, 0.5)
+        title.Position = UDim2.new(0, 58, 0.5, hasSubtitle and -9 or 0)
+        title.Size = UDim2.new(1, -iconButtonSize - 82, 0, 30)
+        if hasSubtitle then
+            local subtitle = text(header, options.subtitle, 12, font.body, color.secondary)
+            subtitle.Position = UDim2.new(0, 58, 0.5, 8)
+            subtitle.Size = UDim2.new(1, -iconButtonSize - 82, 0, 20)
+        end
 
-        local dragRegion = frame(header, { Name = "DragRegion", Size = UDim2.new(1, -targetHeight - 12, 1, 0), Active = true })
+        local dragRegion = frame(header, { Name = "DragRegion", Size = UDim2.new(1, -iconButtonSize - 16, 1, 0), Active = true })
         local hide = button(header, "HideWindow")
         hide.Size = UDim2.fromOffset(iconButtonSize, iconButtonSize)
-        positionRight(hide, 6)
-        local hideIcon = addIcon(hide, "close", 14, color.text)
+        positionRight(hide, 11)
+        local hideIcon = addIcon(hide, "close", 20, color.text)
         hideIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         hideIcon.Position = UDim2.fromScale(0.5, 0.5)
 
@@ -491,17 +531,17 @@ local function loadLibrary()
         local resize = button(main, "ResizeWindow", 8)
         resize.AnchorPoint = Vector2.new(1, 1)
         resize.Position = UDim2.new(1, -7, 1, -5)
-        resize.Size = UDim2.fromOffset(27, 27)
+        resize.Size = UDim2.fromOffset(32, 32)
         resize.Selectable = false
         resize.ZIndex = 3
-        addIcon(resize, "resize", 16, color.secondary).Position = UDim2.fromOffset(5, 5)
+        addIcon(resize, "resize", 22, color.secondary).Position = UDim2.fromOffset(5, 5)
 
         local open = button(safeArea, "ShowWindow", 6)
         open.AnchorPoint = Vector2.new(0.5, 0)
         open.Position = UDim2.new(0.5, 0, 0, 6)
-        open.Size = UDim2.fromOffset(iconButtonSize, iconButtonSize)
+        open.Size = UDim2.fromOffset(56, 56)
         open.Visible = false
-        local openIcon = addIcon(open, options.icon or "ridge", 17, color.accent)
+        local openIcon = addIcon(open, options.icon or "ridge", 35, color.accent)
         openIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         openIcon.Position = UDim2.fromScale(0.5, 0.5)
 
@@ -522,7 +562,7 @@ local function loadLibrary()
         end
 
         local function syncAnimation()
-            if animated and visible and not reducedMotion and backgroundStyle ~= "Solid" then
+            if animated and visible and not activeFarm and not reducedMotion and backgroundStyle ~= "Solid" then
                 backgroundTween:Play()
             else
                 backgroundTween:Pause()
@@ -530,7 +570,7 @@ local function loadLibrary()
         end
 
         function window:SetVisible(value)
-            if destroyed then return end
+            if destroyed or activeFarm then return end
             visible = value == true
             main.Visible = visible
             open.Visible = not visible
@@ -573,9 +613,11 @@ local function loadLibrary()
             if destroyed then return end
             assert(type(fraction) == "number" and fraction == fraction, "Background detail must be a number")
             contourAlpha = 1 - math.clamp(fraction, 0, 1)
-            for _, segment in ipairs(contours:GetDescendants()) do
-                if segment:IsA("Frame") and segment ~= grid and segment ~= dots then
-                    segment.BackgroundTransparency = contourAlpha
+            for _, pattern in ipairs(patterns) do
+                for _, segment in ipairs(pattern:GetChildren()) do
+                    if segment:IsA("Frame") then
+                        segment.BackgroundTransparency = contourAlpha
+                    end
                 end
             end
         end
@@ -587,11 +629,7 @@ local function loadLibrary()
             backgroundStyle = style
             grid.Visible = style == "Grid"
             dots.Visible = style == "Dots"
-            for _, segment in ipairs(contours:GetChildren()) do
-                if segment:IsA("Frame") and segment ~= grid and segment ~= dots then
-                    segment.Visible = style == "Contours"
-                end
-            end
+            contours.Visible = style == "Contours"
             backdrop.Visible = style ~= "Solid"
             syncAnimation()
         end
@@ -603,6 +641,10 @@ local function loadLibrary()
         local function dispose()
             if destroyed then return end
             destroyed = true
+            if activeFarm then activeFarm() end
+            for _, binding in pairs(bindings) do
+                if binding.release then binding.release() end
+            end
             for _, cleanup in ipairs(pluginCleanup) do
                 local ok, reason = pcall(cleanup)
                 if not ok then report(reason, true) end
@@ -678,7 +720,7 @@ local function loadLibrary()
             )
             main.Position = UDim2.fromOffset(actualPosition.X, actualPosition.Y)
             main.Size = UDim2.fromOffset(actualSize.X, actualSize.Y)
-            contourScale.Scale = math.max(0.01, math.min(1, (actualSize.X - 24) / 550, (actualSize.Y - 24) / 460))
+            contourScale.Scale = math.max(0.01, math.min((actualSize.X - 24) / 550, (actualSize.Y - 24) / 460))
             resize.Visible = not fitScreen
             dragRegion.Active = not fitScreen
 
@@ -691,13 +733,13 @@ local function loadLibrary()
                 navigation.Size = UDim2.new(1, -12, 1, -10)
             else
                 rail.Position = UDim2.fromOffset(4, headerHeight + 2)
-                rail.Size = UDim2.new(0, 164, 1, -headerHeight - 6)
-                content.Position = UDim2.fromOffset(171, headerHeight + 2)
-                content.Size = UDim2.new(1, -171, 1, -headerHeight - 7)
+                rail.Size = UDim2.new(0, railWidth, 1, -headerHeight - 6)
+                content.Position = UDim2.fromOffset(railWidth + 7, headerHeight + 2)
+                content.Size = UDim2.new(1, -railWidth - 7, 1, -headerHeight - 7)
                 navigation.Size = UDim2.new(1, -12, 1, -(settingsDock.Visible and targetHeight + 24 or 10))
             end
             settingsDock.Position = UDim2.new(0, 12, 1, -targetHeight - 10)
-            settingsDock.Size = UDim2.fromOffset(148, targetHeight)
+            settingsDock.Size = UDim2.fromOffset(compact and 154 or railWidth - 16, targetHeight)
             local axis = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
             navigation.AutomaticCanvasSize = axis
             navigation.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
@@ -761,13 +803,24 @@ local function loadLibrary()
             if matchesPointer(input, false) then
                 stopPointer()
             end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                local binding = bindings[input.KeyCode]
+                if binding and binding.release then binding.release() end
+            end
         end)
         connect(UserInputService.WindowFocusReleased, function()
             stopPointer()
             clearCapture()
+            for _, binding in pairs(bindings) do
+                if binding.release then binding.release() end
+            end
         end)
 
         connect(UserInputService.InputBegan, function(input, processed)
+            if activeFarm then
+                if not processed and input.KeyCode == toggleKey then activeFarm() end
+                return
+            end
             if input.UserInputType ~= Enum.UserInputType.Keyboard or UserInputService:GetFocusedTextBox() then return end
             local key = input.KeyCode
             if capture then
@@ -790,7 +843,7 @@ local function loadLibrary()
             if processed then return end
             if key == toggleKey then
                 window:Toggle()
-            elseif visible and bindings[key] then
+            elseif bindings[key] and (visible or bindings[key].global) then
                 bindings[key].run()
             end
         end)
@@ -814,12 +867,12 @@ local function loadLibrary()
             local tabButton = button(docked and settingsDock or navigation, tostring(name))
             tabButton.LayoutOrder = order
             if icon then
-                local tabIcon = addIcon(tabButton, icon, 16, color.accent)
+                local tabIcon = addIcon(tabButton, icon, 23, color.accent)
                 tabIcon.AnchorPoint = Vector2.new(0, 0.5)
                 tabIcon.Position = UDim2.new(0, 8, 0.5, 0)
             end
             local tabLabel = text(tabButton, name, 14, font.body, color.secondary)
-            local labelInset = icon and 32 or 10
+            local labelInset = icon and 41 or 10
             tabLabel.Position = UDim2.fromOffset(labelInset, 0)
             tabLabel.Size = UDim2.new(1, -labelInset - 8, 1, 0)
 
@@ -834,7 +887,7 @@ local function loadLibrary()
             local tab = { page = page, label = tabLabel }
             function tab.layout()
                 tabButton.Size = docked and UDim2.fromScale(1, 1)
-                    or compact and UDim2.fromOffset(140, targetHeight)
+                    or compact and UDim2.fromOffset(154, targetHeight)
                     or UDim2.new(1, -8, 0, targetHeight)
             end
             tab.select = interactive(tabButton, function() selectTab(tab) end, color.rail)
@@ -914,7 +967,7 @@ local function loadLibrary()
                     callback, description = description, nil
                 end
                 local row = action(label, description, 25)
-                positionRight(addIcon(row, icon or "arrow", 16, color.accent), 12)
+                positionRight(addIcon(row, icon or "arrow", 22, color.accent), 12)
                 interactive(row, function() invoke(callback) end)
                 return row
             end
@@ -1089,7 +1142,7 @@ local function loadLibrary()
                 local readout = text(select, "", 15, font.title)
                 readout.Position = UDim2.fromOffset(10, 0)
                 readout.Size = UDim2.new(1, -40, 1, 0)
-                local chevron = addIcon(select, "down", 16, color.accent)
+                local chevron = addIcon(select, "down", 21, color.accent)
                 positionRight(chevron, 11)
                 local menu = frame(panel, {
                     Name = "Choices", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 0),
@@ -1124,7 +1177,7 @@ local function loadLibrary()
                     local nameLabel = text(item, choice, 15, font.body)
                     nameLabel.Position = UDim2.fromOffset(10, 0)
                     nameLabel.Size = UDim2.new(1, -36, 1, 0)
-                    local check = addIcon(item, "check", 15, color.accent)
+                    local check = addIcon(item, "check", 20, color.accent)
                     positionRight(check, 10)
                     rows[choice] = { check = check, select = interactive(item, function() set(choice) end, color.rail) }
                 end
@@ -1140,28 +1193,59 @@ local function loadLibrary()
                 local controls = frame(panel, { Size = UDim2.new(1, 0, 0, targetHeight), LayoutOrder = 3 })
                 local rebind = button(controls, "Rebind")
                 positionRight(rebind, 62)
-                rebind.Size = UDim2.new(0.45, 0, 1, 0)
-                make("UISizeConstraint", rebind, { MaxSize = Vector2.new(147, targetHeight) })
+                rebind.Size = UDim2.new(1, -62, 1, 0)
+                make("UISizeConstraint", rebind, { MaxSize = Vector2.new(220, targetHeight) })
                 local readout = text(rebind, "", 14, font.title, color.accent)
                 readout.Position = UDim2.fromOffset(10, 0)
                 readout.Size = UDim2.new(1, -18, 1, 0)
-                local run = button(controls, "Run")
+                local run = button(controls, config.setActive and "Mode" or "Run")
                 positionRight(run, 0)
                 run.Size = UDim2.fromOffset(56, targetHeight)
-                local runLabel = text(run, "Run", 15, font.title)
+                local runLabel = text(run, config.setActive and "Mode" or "Run", 15, font.title)
                 runLabel.Size = UDim2.fromScale(1, 1)
                 runLabel.TextXAlignment = Enum.TextXAlignment.Center
-                local binding = { label = readout }
+                local binding = { label = readout, global = config.setActive ~= nil }
+                local mode, held = "Toggle", false
+                local modes = { "Hold", "Toggle", "Always" }
+                local menu = frame(panel, {
+                    Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 4, Visible = false,
+                })
+                local modeLayout = list(menu, 4)
+                modeLayout.FillDirection = Enum.FillDirection.Horizontal
+                local function modeChanged()
+                    if config.onModeChanged then config.onModeChanged(mode) end
+                end
+                function binding.release()
+                    if held then
+                        held = false
+                        config.setActive(false)
+                    end
+                end
 
                 function binding.run()
-                    if not destroyed then invoke(config.callback, value) end
+                    if destroyed then return end
+                    if config.setActive then
+                        if mode == "Always" then return end
+                        if mode == "Hold" then
+                            if not held then
+                                held = true
+                                config.setActive(true)
+                            end
+                        else
+                            config.toggleActive()
+                        end
+                    else
+                        invoke(config.callback, value)
+                    end
                 end
 
                 function binding.render()
                     if capture == binding then
                         readout.Text = "Press a key…"
                     else
-                        readout.Text = value and value.Name or "Unbound"
+                        local name = value and value.Name or "Unbound"
+                        readout.Text = config.setActive and (name .. " · " .. mode) or name
                     end
                 end
 
@@ -1175,18 +1259,19 @@ local function loadLibrary()
                         or (bindings[nextValue] and bindings[nextValue] ~= binding)) then
                         return false, "Key already in use"
                     end
+                    binding.release()
                     if value then bindings[value] = nil end
                     value = nextValue
                     if value then bindings[value] = binding end
                     binding.render()
-                    if not silent then invoke(config.onChanged, value) end
+                    if not silent and config.onChanged then config.onChanged(value) end
                     return true
                 end
 
                 local ok, errorMessage = binding.set(config.default, true)
                 if not ok then readout.Text = errorMessage end
-                interactive(run, binding.run, color.rail)
                 interactive(rebind, function()
+                    menu.Visible = false
                     local wasCapturing = capture == binding
                     clearCapture()
                     if not wasCapturing then
@@ -1194,7 +1279,174 @@ local function loadLibrary()
                         binding.render()
                     end
                 end, color.rail)
-                return { set = binding.set, get = function() return value end, run = binding.run }
+                if config.setActive then
+                    local function showModes()
+                        clearCapture()
+                        menu.Visible = not menu.Visible
+                    end
+                    connect(rebind.MouseButton2Click, showModes)
+                    interactive(run, showModes, color.rail)
+                    local function selectMode(nextMode, silent)
+                        if not table.find(modes, nextMode) then return end
+                        binding.release()
+                        if mode == "Always" and nextMode ~= "Always" then config.setActive(false) end
+                        mode = nextMode
+                        if mode == "Always" and not silent then config.setActive(true) end
+                        binding.render()
+                        menu.Visible = false
+                        if not silent then modeChanged() end
+                    end
+                    for _, option in ipairs(modes) do
+                        local choice = button(menu, option)
+                        choice.Size = UDim2.new(1 / 3, -3, 0, targetHeight)
+                        local title = text(choice, option, 14, font.title)
+                        title.Size = UDim2.fromScale(1, 1)
+                        title.TextXAlignment = Enum.TextXAlignment.Center
+                        interactive(choice, function() selectMode(option) end, color.rail)
+                    end
+                    selectMode(config.mode or "Toggle", true)
+                else
+                    interactive(run, binding.run, color.rail)
+                end
+                return {
+                    set = binding.set, get = function() return value end,
+                    run = binding.run, getMode = function() return mode end,
+                }
+            end
+
+            function api:AddFarm(label, config)
+                assert(type(config) == "table" and type(config.step) == "function", "Farm needs a step callback")
+                assert(config.variables == nil or type(config.variables) == "table", "Farm variables must be a table")
+                assert(config.stats == nil or type(config.stats) == "table", "Farm stats must be a list")
+                local interval = config.interval or 1
+                assert(type(interval) == "number" and interval >= 0.1 and interval <= 60, "Farm interval must be 0.1–60 seconds")
+                local shown, statLabels, statList = {}, {}, {}
+                for _, stat in ipairs(config.stats or {}) do
+                    assert(type(stat) == "table" and type(stat.key) == "string" and type(stat.label) == "string",
+                        "Each stat needs a string key and label")
+                    assert(shown[stat.key] == nil, "Duplicate farm stat: " .. stat.key)
+                    shown[stat.key] = stat.visible ~= false
+                    table.insert(statList, { key = stat.key, label = stat.label })
+                end
+
+                local function startFarm()
+                    if destroyed or activeFarm or farmWorker then return end
+                    local state = {
+                        running = true, variables = table.clone(config.variables or {}),
+                        stats = {}, elapsed = 0,
+                    }
+                    local runService = game:GetService("RunService")
+                    local overlay = make("ScreenGui", nil, {
+                        Name = "LumaRidgeFarmDashboard", ResetOnSpawn = false,
+                        DisplayOrder = gui.DisplayOrder + 10, ScreenInsets = Enum.ScreenInsets.None,
+                        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+                    })
+                    local black = frame(overlay, {
+                        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0,
+                        BackgroundColor3 = Color3.new(0, 0, 0), Active = true,
+                    })
+                    local dashboard = scroll(black, "Dashboard", Enum.AutomaticSize.Y, color.border)
+                    dashboard.AnchorPoint = Vector2.new(0.5, 0.5)
+                    dashboard.Position = UDim2.fromScale(0.5, 0.5)
+                    dashboard.Size = UDim2.fromScale(0.9, 0.78)
+                    make("UISizeConstraint", dashboard, { MaxSize = Vector2.new(560, 640) })
+                    padding(dashboard, 6, 5)
+                    list(dashboard, 8)
+                    local title = text(dashboard, label .. " · WIP", 21, font.display)
+                    title.Size = UDim2.new(1, -10, 0, 36)
+                    title.LayoutOrder = 1
+                    local status = text(dashboard, "Starting…", 14, font.body, color.secondary, true)
+                    status.Size = UDim2.new(1, -10, 0, 0)
+                    status.AutomaticSize = Enum.AutomaticSize.Y
+                    status.LayoutOrder = 4
+                    local stats = frame(dashboard, { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 5 })
+                    list(stats, 5)
+                    local choices = frame(dashboard, {
+                        Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 6, Visible = false,
+                    })
+                    list(choices, 5)
+                    local function dashboardButton(container, caption, order)
+                        local control = button(container, caption)
+                        control.Size = UDim2.new(1, container == dashboard and -10 or 0, 0, targetHeight)
+                        control.LayoutOrder = order
+                        local labelObject = text(control, caption, 14, font.title)
+                        labelObject.Position = UDim2.fromOffset(12, 0)
+                        labelObject.Size = UDim2.new(1, -24, 1, 0)
+                        return control, labelObject
+                    end
+                    local renderingPaused = false
+                    local function stop()
+                        if activeFarm ~= stop then return end
+                        state.running = false
+                        if renderingPaused then
+                            local ok, reason = pcall(function() runService:Set3dRenderingEnabled(true) end)
+                            if not ok then report("Could not restore 3D rendering: " .. tostring(reason), true) end
+                        end
+                        activeFarm = nil
+                        overlay:Destroy()
+                        table.clear(statLabels)
+                        if not destroyed then
+                            gui.Enabled = true
+                            syncAnimation()
+                        end
+                    end
+                    local stopButton = dashboardButton(dashboard, "Stop and return", 2)
+                    local editButton = dashboardButton(dashboard, "Customize stats", 3)
+                    stopButton.Activated:Connect(stop)
+                    editButton.Activated:Connect(function() choices.Visible = not choices.Visible end)
+                    for index, stat in ipairs(statList) do
+                        local statLabel = text(stats, "", 16, font.title, color.text, true)
+                        statLabel.Size = UDim2.new(1, 0, 0, 0)
+                        statLabel.AutomaticSize = Enum.AutomaticSize.Y
+                        statLabel.LayoutOrder = index
+                        statLabel.Visible = shown[stat.key]
+                        statLabels[stat.key] = statLabel
+                        local choice, caption = dashboardButton(choices, stat.label, index)
+                        local function refreshVisibility()
+                            caption.Text = stat.label .. (shown[stat.key] and " · Shown" or " · Hidden")
+                            statLabel.Visible = shown[stat.key]
+                        end
+                        refreshVisibility()
+                        choice.Activated:Connect(function()
+                            shown[stat.key] = not shown[stat.key]
+                            refreshVisibility()
+                        end)
+                    end
+
+                    activeFarm, farmWorker = stop, true
+                    environment.LumaRidgeFarm = state
+                    clearCapture()
+                    stopPointer()
+                    for _, binding in pairs(bindings) do
+                        if binding.release then binding.release() end
+                    end
+                    overlay.Parent = parent
+                    gui.Enabled = false
+                    syncAnimation()
+                    -- shortcut: Runtime has no render-state getter. Restore rendering after a successful pause.
+                    renderingPaused = pcall(function() runService:Set3dRenderingEnabled(false) end)
+                    local renderStatus = renderingPaused and "3D paused" or "3D pause unavailable"
+                    local began = os.clock()
+                    task.spawn(function()
+                        local ok, reason = xpcall(function()
+                            while state.running do
+                                state.elapsed = math.floor(os.clock() - began)
+                                local keepGoing = config.step(state)
+                                if not state.running or keepGoing == false then break end
+                                status.Text = string.format("%s  ·  %ds elapsed", renderStatus, state.elapsed)
+                                for _, stat in ipairs(statList) do
+                                    local value = state.stats[stat.key]
+                                    statLabels[stat.key].Text = stat.label .. "  ·  " .. (value == nil and "—" or tostring(value))
+                                end
+                                task.wait(interval)
+                            end
+                        end, debug.traceback)
+                        farmWorker = nil
+                        if not ok then report("Farm stopped: " .. tostring(reason), true) end
+                        stop()
+                    end)
+                end
+                return self:AddButton(label, config.description, startFarm, "play")
             end
 
             return api
@@ -1209,23 +1461,36 @@ local function loadLibrary()
             appearance = self:AddTab("Settings", "settings", true)
             layout()
             appearance:AddSection("Interface")
-            local sizes = { Small = 1, Default = 1.1, Large = 1.25 }
+            local sizes = { Small = 1, Default = 1.25, Large = 1.4 }
+            local function applyTextSize(choice)
+                preferences.textSize = choice
+                textScale = sizes[choice]
+                for object, size in pairs(textSizes) do
+                    object.TextSize = math.round(size * textScale)
+                end
+            end
+            local initialSize = sizes[preferences.textSize] and preferences.textSize or "Default"
+            applyTextSize(initialSize)
             appearance:AddDropdown("Text size", {
-                options = { "Small", "Default", "Large" }, default = "Default",
-                callback = function(choice)
-                    textScale = sizes[choice]
-                    for object, size in pairs(textSizes) do
-                        object.TextSize = math.round(size * textScale)
-                    end
-                end,
+                options = { "Small", "Default", "Large" }, default = initialSize,
+                callback = applyTextSize,
             })
 
             appearance:AddSection("Background")
+            local styles = { "Contours", "Grid", "Dots", "Gradient", "Solid" }
+            if table.find(styles, preferences.backgroundStyle) then self:SetBackgroundStyle(preferences.backgroundStyle) end
             appearance:AddDropdown("Background style", {
-                options = { "Contours", "Grid", "Dots", "Gradient", "Solid" }, default = backgroundStyle,
-                callback = function(style) self:SetBackgroundStyle(style) end,
+                options = styles, default = backgroundStyle,
+                callback = function(style)
+                    self:SetBackgroundStyle(style)
+                    preferences.backgroundStyle = style
+                end,
             })
             local speeds = { Fast = 6, Normal = 12, Slow = 24 }
+            if speeds[preferences.motionSpeed] then self:SetBackgroundSpeed(speeds[preferences.motionSpeed]) end
+            if type(preferences.detail) == "number" and preferences.detail == preferences.detail then
+                self:SetBackgroundDetail(preferences.detail / 100)
+            end
             local speed = backgroundDuration == 6 and "Fast"
                 or backgroundDuration == 12 and "Normal"
                 or backgroundDuration == 24 and "Slow"
@@ -1233,22 +1498,35 @@ local function loadLibrary()
             if reducedMotion then
                 appearance:AddLabel("Reduced motion is enabled. Animation is paused.")
             else
+                if type(preferences.animate) == "boolean" then self:SetBackgroundMotion(preferences.animate) end
                 appearance:AddToggle("Animate background", nil, animated, function(enabled)
                     self:SetBackgroundMotion(enabled)
+                    preferences.animate = enabled
                 end)
             end
             appearance:AddDropdown("Motion speed", {
                 options = { "Fast", "Normal", "Slow" }, default = speed, placeholder = "Custom speed",
-                callback = function(choice) self:SetBackgroundSpeed(speeds[choice]) end,
+                callback = function(choice)
+                    self:SetBackgroundSpeed(speeds[choice])
+                    preferences.motionSpeed = choice
+                end,
             })
             appearance:AddSlider("Background detail", {
                 description = "Adjust pattern visibility.",
                 min = 0, max = 100, default = math.round((1 - contourAlpha) * 100),
-                callback = function(value) self:SetBackgroundDetail(value / 100) end,
+                callback = function(value)
+                    self:SetBackgroundDetail(value / 100)
+                    preferences.detail = value
+                end,
             })
             appearance:AddSection("Session")
+            local saveStatus = appearance:AddLabel("")
+            appearance:AddButton("Save config", "Save appearance and Player keybinds to this executor workspace.", function()
+                saveStatus.Text = savePreferences() and "Configuration saved." or "Could not save configuration. Check Debug."
+            end)
             appearance:AddToggle("Debug", "Show diagnostics and print events.", debugEnabled, function(enabled)
                 debugEnabled = enabled
+                preferences.debug = enabled
                 debugLabel.Visible = enabled
                 report("Debug " .. (enabled and "enabled" or "disabled"))
             end)
@@ -1279,30 +1557,38 @@ end
 local window = LumaRidge.new({
     name = "LumaRidgeExecutorDemo",
     title = "Luma Ridge",
-    subtitle = "Component playground",
     toggleKey = Enum.KeyCode.RightShift,
 })
 activeWindow = window
 environment.LumaRidge = window
 
 local overview = window:AddTab("Overview", "grid")
-overview:AddSection("Quick actions")
-local status = overview:AddLabel("Run the action to see its result here.")
-local runs = 0
-local function runAction()
-    runs += 1
-    status.Text = string.format("Action run %d %s.", runs, runs == 1 and "time" or "times")
+overview:AddSection("Trail survey")
+overview:AddLabel("Record waypoints, configure your map, or try the survey dashboard. These examples update local counters.")
+local waypoints, recording = 0, true
+local status = overview:AddLabel("Waypoints recorded  ·  0")
+local function recordWaypoint()
+    if not recording then
+        status.Text = "Recording is paused."
+        return
+    end
+    waypoints += 1
+    status.Text = "Waypoints recorded  ·  " .. waypoints
 end
-
-overview:AddButton("Run action", "Update the status above.", runAction)
-overview:AddKeybind("Run action shortcut", {
-    description = "Press the assigned key or select Run. Escape cancels rebinding and Backspace clears the key.",
-    default = Enum.KeyCode.F,
-    callback = runAction,
+local record = overview:AddToggle("Record waypoints", "Pause or resume manual recording.", recording, function(enabled)
+    recording = enabled
+    status.Text = enabled and ("Waypoints recorded  ·  " .. waypoints) or "Recording is paused."
+end)
+overview:AddButton("Record waypoint", "Add one waypoint to the survey.", recordWaypoint, "plus")
+overview:AddKeybind("Record waypoint shortcut", { default = Enum.KeyCode.F, callback = recordWaypoint })
+overview:AddKeybind("Recording mode shortcut", {
+    description = "Click to bind. Right-click or select Mode for Hold, Toggle, and Always.",
+    setActive = function(enabled) record.set(enabled) end,
+    toggleActive = function() record.set(not record.get()) end,
 })
 
-local settings = window:AddTab("Controls", "folder")
-settings:AddSection("Preferences")
+local settings = window:AddTab("Map", "folder")
+settings:AddSection("Map setup")
 local selection = settings:AddLabel("Profile: Hiker / Detail: 60% / Map: Terrain")
 local profile, detail, map = "Hiker", 60, "Terrain"
 local function showSelection()
@@ -1310,7 +1596,7 @@ local function showSelection()
 end
 
 local detailControl = settings:AddSlider("Detail", {
-    description = "Drag the track to set the detail level.",
+    description = "Set the preferred detail for the survey map.",
     min = 0, max = 100, step = 5, default = detail,
     callback = function(value)
         detail = value
@@ -1331,6 +1617,28 @@ local profileControl = settings:AddInput("Profile name", {
     callback = function(value)
         profile = value ~= "" and value or "Unnamed"
         showSelection()
+    end,
+})
+
+local farmTab = window:AddTab("Farm · WIP", "play")
+farmTab:AddSection("Survey dashboard")
+farmTab:AddLabel("Run a simulated survey in fullscreen. Use Customize stats to show or hide individual counters.")
+farmTab:AddFarm("Start survey", {
+    description = "Collect example waypoints and samples once per second.",
+    interval = 1,
+    variables = { route = "North Ridge", samplesPerWaypoint = 3 },
+    stats = {
+        { key = "route", label = "Route" },
+        { key = "waypoints", label = "Waypoints" },
+        { key = "samples", label = "Samples" },
+        { key = "rate", label = "Samples per waypoint", visible = false },
+    },
+    step = function(session)
+        local count = (session.stats.waypoints or 0) + 1
+        session.stats.route = session.variables.route
+        session.stats.waypoints = count
+        session.stats.samples = count * session.variables.samplesPerWaypoint
+        session.stats.rate = session.variables.samplesPerWaypoint
     end,
 })
 
@@ -1360,41 +1668,84 @@ window:Use({
     name = "Player controls",
     setup = function(ui)
         local tab = ui:AddTab("Player", "sliders")
-        local bridge = playerGui:FindFirstChild("LumaRidgePlayerActions")
-        if not bridge or not bridge:IsA("BindableFunction") then
-            tab:AddLabel("Install the Player server Script and LocalScript in your own experience, then reopen this panel.")
-            return
+        local player = players.LocalPlayer
+        local connections = {}
+        local panel, wasEnabled
+        local function observe(attribute, callback)
+            table.insert(connections, player:GetAttributeChangedSignal(attribute):Connect(callback))
         end
-        local panel = playerGui:FindFirstChild("LumaRidgePlayerPanel")
-        local wasEnabled = panel and panel.Enabled
-        if panel then panel.Enabled = false end
         local status = tab:AddLabel("")
-        local function refresh()
-            status.Text = string.format("Fly %s · Noclip %s · Invisible %s",
-                players.LocalPlayer:GetAttribute("LRFly") and "on" or "off",
-                players.LocalPlayer:GetAttribute("LRNoclip") and "on" or "off",
-                players.LocalPlayer:GetAttribute("LRInvisible") and "on" or "off")
+        local function findBridge()
+            local bridge = playerGui:FindFirstChild("LumaRidgePlayerActions")
+            if bridge and bridge:IsA("BindableFunction") then return bridge end
         end
         local function action(name, value)
-            local ok, message = bridge:Invoke(name, value)
-            if not ok then report(message, true) end
+            local bridge = findBridge()
+            if not bridge or not player:GetAttribute("LRCharacterReady") then return false end
+            local ok, accepted, message = pcall(bridge.Invoke, bridge, name, value)
+            if not ok or not accepted then report(ok and message or accepted, true) end
+            return ok and accepted
         end
-        tab:AddSlider("Walk speed", { min = 0, max = 64, default = 16,
-            callback = function(value) action("setWalkSpeed", value) end })
-        tab:AddInput("Jump power / height", {
+        tab:AddSection("Movement")
+        local walk
+        walk = tab:AddSlider("Walk speed", { min = 0, max = 64, default = player:GetAttribute("LRWalkSpeed") or 16,
+            callback = function(value)
+                if not action("setWalkSpeed", value) then walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end
+            end })
+        observe("LRWalkSpeed", function() walk.set(player:GetAttribute("LRWalkSpeed") or 16, true) end)
+        local jump
+        jump = tab:AddInput("Jump power / height", {
             description = "Power uses 0–100. Height uses 0–25. The server selects the current jump mode.",
             placeholder = "Enter a number",
+            default = player:GetAttribute("LRJump"),
             callback = function(value)
                 local number = tonumber(value)
-                if number then action("setJump", number) end
+                if not number or not action("setJump", number) then jump.set(player:GetAttribute("LRJump"), true) end
             end,
         })
-        tab:AddSlider("Fly speed", { min = 1, max = 100, default = 40,
-            callback = function(value) action("setFlySpeed", value) end })
-        tab:AddButton("Toggle fly", "WASD, Space and Ctrl", function() action("toggleFly") end)
-        tab:AddButton("Toggle noclip", function() action("toggleNoclip") end)
-        tab:AddButton("Toggle invisible", function() action("toggleInvisible") end)
-        if players.LocalPlayer:GetAttribute("LRGravityAllowed") then
+        observe("LRJump", function() jump.set(player:GetAttribute("LRJump"), true) end)
+        local flySpeed
+        flySpeed = tab:AddSlider("Fly speed", { min = 1, max = 100, default = player:GetAttribute("LRFlySpeed") or 40,
+            callback = function(value)
+                if not action("setFlySpeed", value) then flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end
+            end })
+        observe("LRFlySpeed", function() flySpeed.set(player:GetAttribute("LRFlySpeed") or 40, true) end)
+        tab:AddSection("Abilities")
+        if type(preferences.bindings) ~= "table" then preferences.bindings = {} end
+        local features = {
+            { name = "Fly", description = "WASD, Space and Ctrl" },
+            { name = "Noclip", description = "Pass through surfaces" },
+            { name = "Invisible", description = "Hide your character from other players" },
+        }
+        for _, feature in ipairs(features) do
+            local name = feature.name
+            local attribute = "LR" .. name
+            local function active() return player:GetAttribute(attribute) == true end
+            local function setActive(value) return action("set" .. name, value) end
+            local saved = preferences.bindings[name]
+            if type(saved) ~= "table" then saved = {} end
+            preferences.bindings[name] = saved
+            local defaultKey
+            if type(saved.key) == "string" then
+                local ok, key = pcall(function() return Enum.KeyCode[saved.key] end)
+                if ok then defaultKey = key end
+            end
+            local toggle
+            toggle = tab:AddToggle(name, feature.description, active(), function(enabled)
+                if (not enabled and feature.binding.getMode() == "Always") or not setActive(enabled) then
+                    toggle.set(active(), true)
+                end
+            end)
+            observe(attribute, function() toggle.set(active(), true) end)
+            feature.setActive = setActive
+            feature.binding = tab:AddKeybind(name .. " keybind", {
+                default = defaultKey, mode = saved.mode, setActive = setActive,
+                toggleActive = function() action("toggle" .. name) end,
+                onChanged = function(key) saved.key = key and key.Name or nil end,
+                onModeChanged = function(mode) saved.mode = mode end,
+            })
+        end
+        if player:GetAttribute("LRGravityAllowed") then
             tab:AddInput("Experience gravity", {
                 description = "Changes gravity for everyone. Server range 0–300.",
                 callback = function(value)
@@ -1403,13 +1754,37 @@ window:Use({
                 end,
             })
         end
-        local connections = {}
-        for _, attribute in ipairs({ "LRFly", "LRNoclip", "LRInvisible" }) do
-            table.insert(connections, players.LocalPlayer:GetAttributeChangedSignal(attribute):Connect(refresh))
+        local function refresh()
+            local bridge = findBridge()
+            local currentPanel = playerGui:FindFirstChild("LumaRidgePlayerPanel")
+            if bridge and currentPanel and currentPanel:IsA("ScreenGui") and panel ~= currentPanel then
+                panel, wasEnabled = currentPanel, currentPanel.Enabled
+                panel.Enabled = false
+            end
+            if not bridge then
+                status.Text = "Install the Player server Script and LocalScript in your experience to enable these controls."
+            elseif not player:GetAttribute("LRPlayerAllowed") then
+                status.Text = "Your user ID is not enabled for Player controls."
+            elseif not player:GetAttribute("LRCharacterReady") then
+                status.Text = "Waiting for your character."
+            else
+                status.Text = "Click a keybind to set a key. Right click it to choose a mode."
+                for _, feature in ipairs(features) do
+                    if feature.binding.getMode() == "Always" then feature.setActive(true) end
+                end
+            end
         end
+        observe("LRCharacterReady", refresh)
+        observe("LRPlayerAllowed", refresh)
+        table.insert(connections, playerGui.ChildAdded:Connect(function(child)
+            if child.Name == "LumaRidgePlayerActions" or child.Name == "LumaRidgePlayerPanel" then refresh() end
+        end))
         refresh()
         return function()
             for _, connection in ipairs(connections) do connection:Disconnect() end
+            for _, feature in ipairs(features) do
+                if feature.binding.getMode() == "Always" then feature.setActive(false) end
+            end
             if panel and panel.Parent then panel.Enabled = wasEnabled end
         end
     end,

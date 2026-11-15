@@ -7,11 +7,13 @@
 
 The LocalScript provides a small control panel and camera-relative keyboard flight. The framework's built-in **Player** tab uses the same LocalScript callbacks when it finds them. It temporarily hides the small panel while attached and restores it when unloaded.
 
+Install the current versions of both scripts for the Player tab's switches and keybinds. The tab mirrors server state and sends explicit on or off requests for Hold and Always modes.
+
 All character changes run on the server and target the requesting player's current character. Numeric requests are clamped and requests are rate limited. The LocalScript sends normalized flight direction at 15 Hz, and the server owns the flying assembly. Missing input stops flight after one second.
 
 Walk speed starts at 16 and accepts 0–64. Jump accepts 0–100 for JumpPower or 0–25 for JumpHeight, depending on UseJumpPower. Fly speed accepts 1–100. Toggle states reset on death and respawn. Walk speed survives respawn, while jump uses the new character's defaults.
 
-Noclip restores each part's saved collision state. Invisibility restores saved transparency, effect Enabled flags, and the Humanoid name display setting. Descendants added while enabled are handled too. Character and Humanoid instances are preserved.
+Noclip restores each part's saved collision state. Invisibility restores saved transparency, effect Enabled flags, and the Humanoid name display setting. Descendants added while enabled are handled too. Character and Humanoid instances are preserved. In the framework, an ability configured as Always is requested again once the new character is ready.
 
 Gravity is disabled by default. To enable it, set `ENABLE_GLOBAL_GRAVITY = true` and list admins in `GRAVITY_ADMIN_IDS`. It accepts 0–300 and changes Workspace.Gravity for the entire experience.
 

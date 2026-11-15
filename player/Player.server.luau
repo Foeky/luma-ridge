@@ -91,6 +91,7 @@ local function cleanupCharacter(state)
     for _, connection in ipairs(state.characterConnections) do connection:Disconnect() end
     table.clear(state.characterConnections)
     state.character, state.humanoid = nil, nil
+    state.player:SetAttribute("LRCharacterReady", false)
 end
 
 local function startFly(state)
@@ -140,11 +141,18 @@ local function bindCharacter(state, character)
         if state.character ~= character or not humanoid or not humanoid:IsA("Humanoid") then return end
         state.humanoid = humanoid
         if not permitted(state.player) then return end
+        if humanoid.Health <= 0 then return end
         humanoid.WalkSpeed = state.walkSpeed
-        state.player:SetAttribute("LRUseJumpPower", humanoid.UseJumpPower)
-        table.insert(state.characterConnections, humanoid:GetPropertyChangedSignal("UseJumpPower"):Connect(function()
+        state.player:SetAttribute("LRWalkSpeed", state.walkSpeed)
+        state.player:SetAttribute("LRFlySpeed", state.flySpeed)
+        local function syncJump()
             state.player:SetAttribute("LRUseJumpPower", humanoid.UseJumpPower)
-        end))
+            state.player:SetAttribute("LRJump", humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight)
+        end
+        syncJump()
+        for _, property in ipairs({ "UseJumpPower", "JumpPower", "JumpHeight" }) do
+            table.insert(state.characterConnections, humanoid:GetPropertyChangedSignal(property):Connect(syncJump))
+        end
         table.insert(state.characterConnections, humanoid.Died:Connect(function() cleanupCharacter(state) end))
         table.insert(state.characterConnections, character.DescendantAdded:Connect(function(object) applyPart(state, object) end))
         table.insert(state.characterConnections, character.DescendantRemoving:Connect(function(object)
@@ -156,6 +164,7 @@ local function bindCharacter(state, character)
                 end
             end
         end))
+        state.player:SetAttribute("LRCharacterReady", true)
     end)
 end
 
@@ -190,28 +199,39 @@ remote.OnServerEvent:Connect(function(player, action, value, facing)
     local now = os.clock()
     state.tokens = math.min(40, state.tokens + (now - state.updated) * 25)
     state.updated = now
-    if state.tokens < 1 then return end
-    state.tokens -= 1
+    local releasing = action == "stopFly" or (value == false
+        and (action == "setFly" or action == "setNoclip" or action == "setInvisible"))
+    if not releasing then
+        if state.tokens < 1 then return end
+        state.tokens -= 1
+    end
     local humanoid = state.humanoid
     if not humanoid or not humanoid.Parent or humanoid.Health <= 0 or state.character ~= player.Character then return end
     if action == "setWalkSpeed" and finite(value) then
         state.walkSpeed = math.clamp(value, 0, 64)
         humanoid.WalkSpeed = state.walkSpeed
+        player:SetAttribute("LRWalkSpeed", state.walkSpeed)
     elseif action == "setJump" and finite(value) then
         if humanoid.UseJumpPower then humanoid.JumpPower = math.clamp(value, 0, 100)
         else humanoid.JumpHeight = math.clamp(value, 0, 25) end
     elseif action == "setFlySpeed" and finite(value) then
         state.flySpeed = math.clamp(value, 1, 100)
-    elseif action == "toggleFly" then
-        if state.flight then stopFly(state) else startFly(state) end
-    elseif action == "toggleNoclip" then
-        state.noclip = not state.noclip
+        player:SetAttribute("LRFlySpeed", state.flySpeed)
+    elseif action == "toggleFly" or (action == "setFly" and type(value) == "boolean") then
+        if action == "toggleFly" then value = not state.flight end
+        if value then startFly(state) else stopFly(state) end
+    elseif action == "toggleNoclip" or (action == "setNoclip" and type(value) == "boolean") then
+        if action == "toggleNoclip" then value = not state.noclip end
+        if state.noclip == value then return end
+        state.noclip = value
         if state.noclip then
             for _, object in ipairs(state.character:GetDescendants()) do applyPart(state, object) end
         else restore(state.collision) end
         player:SetAttribute("LRNoclip", state.noclip)
-    elseif action == "toggleInvisible" then
-        state.invisible = not state.invisible
+    elseif action == "toggleInvisible" or (action == "setInvisible" and type(value) == "boolean") then
+        if action == "toggleInvisible" then value = not state.invisible end
+        if state.invisible == value then return end
+        state.invisible = value
         if state.invisible then
             for _, object in ipairs(state.character:GetDescendants()) do applyPart(state, object) end
         else restore(state.visibility) end
